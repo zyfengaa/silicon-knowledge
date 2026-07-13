@@ -21,15 +21,22 @@ Run:
 Output:
   - Console summary of hit rates.
   - Saved plot: cache_hitrate_vs_wss.png
-  - Interactive plot window.
+  - Interactive plot window (if DISPLAY is set).
 
 Reference:
   Hennessy & Patterson, "Computer Architecture: A Quantitative
   Approach", 6th Ed., Chapter 2.
 """
 
+import matplotlib
+# Use non-interactive Agg backend when no display is available
+import os
+if not os.environ.get('DISPLAY'):
+    matplotlib.use('Agg')
+
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 # ================================================================
 # Cache parameters
@@ -175,10 +182,15 @@ def main():
     ax.legend(title='Associativity')
     ax.grid(True, alpha=0.3, which='both')
 
+    sys.stdout.flush()
+
     plt.tight_layout()
     plt.savefig('cache_hitrate_vs_wss.png', dpi=150)
     print(f"\nPlot saved to cache_hitrate_vs_wss.png")
-    plt.show()
+
+    # Only open interactive window if a display is available
+    if os.environ.get('DISPLAY'):
+        plt.show()
 
 
 if __name__ == '__main__':
