@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.png
+
+# C/C++ compiled binaries
+*.o
+*.out
+
+# CUDA compiled
+*.fatbin
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Compiled executables (at module root or code dir)
+cache_sim
+matmul_tiling
+matrix_mult_tiling
