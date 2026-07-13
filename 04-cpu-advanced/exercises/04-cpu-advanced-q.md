@@ -1,51 +1,51 @@
-# Module 04: CPU Advanced -- Exercises
+# 模块 04：CPU 高级主题（CPU Advanced）-- 练习题
 
-## 04-cpu-advanced-q.md: Questions and Problems
-
----
-
-## Section 1: Superscalar IPC Calculation
-
-### Question 1.1
-
-A 4-wide superscalar processor can fetch, decode, issue, and commit up to 4 instructions per cycle. However, dependencies between instructions limit the achievable IPC. Given the following dependence profile for a program (assume a perfect branch predictor with no mispredictions):
-
-- 20% of instructions depend on the immediately preceding instruction (a 1-cycle RAW hazard)
-- 10% of instructions depend on an instruction 2--3 positions ahead (a 2--3 cycle RAW hazard)
-- 5% of instructions are branches (resolved in 1 cycle, perfect prediction)
-- Remaining instructions are independent or depend on instructions far enough back to be ready
-
-Assume:
-- The processor has enough functional units to sustain 4-wide execution
-- Full forwarding/bypassing is implemented (no structural hazards)
-- Branches are predicted perfectly and incur no penalty
-- An instruction that depends on the immediately preceding instruction must wait 1 cycle before issuing
-- An instruction that depends on an instruction 2--3 ahead must wait 2 cycles before issuing
-
-Calculate the **maximum achievable IPC** for this workload. Show your reasoning.
-
-### Question 1.2
-
-Suppose we double the issue width from 4-wide to 8-wide, but the dependence profile remains the same. Does the IPC double? Explain why or why not, and discuss the practical limits of increasing issue width.
+## 04-cpu-advanced-q.md：问题与练习
 
 ---
 
-## Section 2: Out-of-Order Execution Structures
+## 第 1 节：超标量 IPC 计算（Superscalar IPC Calculation）
 
-### Question 2.1
+### 问题 1.1
 
-Explain the roles of the **Reorder Buffer (ROB)** and **Reservation Stations (RS)** in an out-of-order processor. For each structure, describe:
+一个 4 路超标量（4-wide superscalar）处理器每周期可以取指、解码、发射和提交最多 4 条指令。然而，指令之间的依赖关系限制了可达到的 IPC。给定以下程序的依赖关系分布（假设完美的分支预测器，无预测错误）：
 
-| Aspect               | Reorder Buffer (ROB)                     | Reservation Stations (RS)               |
+- 20% 的指令依赖于其直接前一条指令（1 周期 RAW 冒险）
+- 10% 的指令依赖于其前 2-3 条位置的指令（2-3 周期 RAW 冒险）
+- 5% 的指令是分支（1 周期内解决，完美预测）
+- 其余指令是独立的，或依赖的指令足够远，已经就绪
+
+假设：
+- 处理器有足够的功能单元来支持 4 路执行
+- 实现了完整的 forwarding/bypassing（无结构冒险）
+- 分支被完美预测，不产生惩罚
+- 依赖直接前一条指令的指令必须等待 1 个周期才能发射
+- 依赖前 2-3 条位置指令的指令必须等待 2 个周期才能发射
+
+计算该工作负载的**最大可达 IPC**。展示你的推理过程。
+
+### 问题 1.2
+
+假设我们将发射宽度（issue width）从 4 路翻倍到 8 路，但依赖关系分布保持不变。IPC 会翻倍吗？解释原因，并讨论增加发射宽度的实际限制。
+
+---
+
+## 第 2 节：乱序执行结构（Out-of-Order Execution Structures）
+
+### 问题 2.1
+
+解释**重排序缓冲区（Reorder Buffer, ROB）**和**保留站（Reservation Stations, RS）**在乱序处理器中的作用。对于每种结构，描述：
+
+| 方面 | 重排序缓冲区（ROB） | 保留站（RS） |
 |----------------------|------------------------------------------|------------------------------------------|
-| **What it stores**   |                                          |                                          |
-| **When allocated**   |                                          |                                          |
-| **When freed**       |                                          |                                          |
-| **Role in misprediction** |                                       |                                          |
+| **存储什么** | | |
+| **何时分配** | | |
+| **何时释放** | | |
+| **在预测错误中的作用** | | |
 
-### Question 2.2
+### 问题 2.2
 
-Consider the following instruction sequence executing on a Tomasulo-style out-of-order processor:
+考虑以下在 Tomasulo 风格乱序处理器上执行的指令序列：
 
 ```
 FADD f1, f2, f3      # f1 = f2 + f3
@@ -53,70 +53,70 @@ FMUL f3, f4, f5      # f3 = f4 * f5  (WAR on f3)
 FADD f6, f3, f7      # f6 = f3 + f7  (RAW on f3)
 ```
 
-a) Identify all true (RAW) and anti (WAR) dependencies.
-b) Explain how register renaming eliminates the WAR dependency. Show the renamed register mappings for each instruction.
-c) After renaming, which instructions can execute in parallel?
+a) 识别所有真依赖（RAW）和反依赖（WAR）。
+b) 解释寄存器重命名（register renaming）如何消除 WAR 依赖。展示每条指令重命名后的寄存器映射。
+c) 重命名之后，哪些指令可以并行执行？
 
-### Question 2.3
+### 问题 2.3
 
-On a branch misprediction in an out-of-order processor, both the ROB and RS must be flushed. Why must both structures be cleared, not just one? What state is lost from each, and why can't instructions in the RS survive the misprediction?
+在乱序处理器中发生分支预测错误时，ROB 和 RS 都必须被刷清（flush）。为什么两个结构都必须清空，而不是只清空一个？每个结构中丢失了什么状态，为什么 RS 中的指令不能在预测错误后幸存？
 
 ---
 
-## Section 3: Branch Prediction Comparison
+## 第 3 节：分支预测比较（Branch Prediction Comparison）
 
-### Question 3.1
+### 问题 3.1
 
-Compare a **2-bit saturating counter** predictor and a **TAGE** predictor across the following dimensions:
+比较**2 位饱和计数器（2-bit saturating counter）**预测器和 **TAGE** 预测器在以下维度上的差异：
 
-| Dimension              | 2-bit Saturating Counter | TAGE |
+| 维度 | 2-bit Saturating Counter | TAGE |
 |------------------------|--------------------------|------|
-| Always-taken branch    |                          |      |
-| Hard-to-predict branch |                          |      |
-| Loop with fixed trip count (e.g., for i in 0..100) | | |
-| Storage cost (entries) |                          |      |
-| Circuit complexity     |                          |      |
+| 总是跳转的分支 | | |
+| 难以预测的分支 | | |
+| 固定循环次数的循环（例如 for i in 0..100） | | |
+| 存储成本（条目数） | | |
+| 电路复杂度 | | |
 
-### Question 3.2
+### 问题 3.2
 
-Consider a branch with the following repeating pattern of outcomes (T = Taken, N = Not Taken):
+考虑一个分支，其结果的重复模式如下（T = 跳转, N = 不跳转）：
 
 ```
 T T T T N   T T T T N   T T T T N   ...
 ```
 
-The pattern repeats every 5 branches (4 Taken, 1 Not Taken).
+该模式每 5 个分支重复一次（4 次跳转，1 次不跳转）。
 
-a) Simulate the behavior of a 2-bit saturating counter predictor starting from the "weakly not-taken" state (01). How many mispredictions occur over 100 iterations (500 branches)? Report the final counter state.
-b) Explain how TAGE would handle this pattern better. Which history length table is likely to provide the correct prediction? How many mispredictions would TAGE incur after the pattern is learned?
+a) 模拟 2 位饱和计数器预测器从"弱不跳转"状态（01）开始的行为。在 100 次迭代（500 个分支）中会发生多少次预测错误？报告最终的计数器状态。
+b) 解释 TAGE 如何更好地处理这种模式。哪个历史长度表可能提供正确的预测？在模式被学习后，TAGE 会产生多少次预测错误？
 
-### Question 3.3
+### 问题 3.3
 
-Why does TAGE use geometrically increasing history lengths (e.g., 4, 8, 16, 32, 64, 128) rather than linearly increasing lengths (e.g., 2, 4, 6, 8, 10)? Provide two concrete reasons related to branch behavior and hardware cost.
+为什么 TAGE 使用几何增长的历史长度（例如 4, 8, 16, 32, 64, 128）而不是线性增长的长度（例如 2, 4, 6, 8, 10）？提供两个与分支行为和硬件成本相关的具体原因。
 
 ---
 
-## Section 4: SIMD Speedup Calculation
+## 第 4 节：SIMD 加速比计算（SIMD Speedup Calculation）
 
-### Question 4.1
+### 问题 4.1
 
-Compare **128-bit NEON** and **256-bit AVX2** for single-precision (32-bit) floating-point operations.
+比较**128 位 NEON**和**256 位 AVX2**在单精度（32 位）浮点运算方面的性能。
 
-a) How many single-precision floats fit in each vector register?
-   - 128-bit NEON: _____ floats
-   - 256-bit AVX2: _____ floats
+a) 每个向量寄存器中可以容纳多少个单精度浮点数？
+   - 128 位 NEON：_____ 个浮点数
+   - 256 位 AVX2：_____ 个浮点数
 
-b) Calculate the **theoretical speedup** of each SIMD extension over scalar execution for an element-wise vector addition `C[i] = A[i] + B[i]` with no dependencies between iterations. Assume no memory bottlenecks.
+b) 计算每个 SIMD 扩展相对于标量执行（scalar execution）的**理论加速比**，用于逐元素向量加法 `C[i] = A[i] + B[i]`，假设迭代之间无依赖关系且无内存瓶颈。
 
-| Implementation | Elements per iteration | Theoretical speedup vs. scalar |
+| 实现 | 每次迭代的元素数 | 相对于标量的理论加速比 |
 |----------------|-----------------------|-------------------------------|
-| Scalar         | 1                     | 1.0x (baseline)               |
-| 128-bit NEON   |                       |                                |
-| 256-bit AVX2   |                       |                                |
+| 标量（Scalar） | 1 | 1.0x（基准） |
+| 128 位 NEON | | |
+| 256 位 AVX2 | | |
 
-### Question 4.2
+### 问题 4.2
 
-Now consider a **reduction** operation -- summing all elements of a single-precision array of length N:
+现在考虑一个**归约（reduction）**操作——将长度为 N 的单精度数组的所有元素求和：
 
 ```c
 float sum = 0.0f;
@@ -125,106 +125,106 @@ for (int i = 0; i < N; i++) {
 }
 ```
 
-In a SIMD reduction, the partial results held in each vector lane must be combined at the end (a "horizontal add" or "had" sequence).
+在 SIMD 归约中，每个向量通道（lane）中保存的部分结果必须在最后合并（即"水平相加（horizontal add / hadd）"序列）。
 
-a) For NEON (128-bit, 4 floats), how many horizontal-add steps are needed to combine the 4 partial sums into one scalar result? Show the reduction tree.
-b) For AVX2 (256-bit, 8 floats), how many horizontal-add steps are needed? Show the reduction tree.
-c) Calculate the effective speedup for N = 1024. Assume:
-   - Each vector addition (vertical add) takes 1 cycle
-   - Each horizontal-add step takes 3 cycles
-   - All memory access costs are identical across implementations
+a) 对于 NEON（128 位，4 个浮点数），需要多少步水平相加才能将 4 个部分和合并为一个标量结果？展示归约树。
+b) 对于 AVX2（256 位，8 个浮点数），需要多少步水平相加？展示归约树。
+c) 计算 N = 1024 时的有效加速比。假设：
+   - 每次向量加法（垂直相加）需要 1 个周期
+   - 每次水平相加步骤需要 3 个周期
+   - 所有实现的内存访问成本相同
 
-| Implementation | Cycles for 1024 vertical adds (1024/lane_width) | Cycles for final horizontal reduction | Total cycles | Speedup vs. scalar |
+| 实现 | 1024 次垂直相加的周期数 (1024/通道宽度) | 最终水平归约的周期数 | 总周期数 | 相对于标量的加速比 |
 |----------------|-------------------------------------------------|---------------------------------------|-------------|---------------------|
-| Scalar         | 1024                                            | 0                                     | 1024        | 1.0x                |
-| NEON (4-lane)  |                                                 |                                       |             |                     |
-| AVX2 (8-lane)  |                                                 |                                       |             |                     |
+| 标量 | 1024 | 0 | 1024 | 1.0x |
+| NEON (4-lane) | | | | |
+| AVX2 (8-lane) | | | | |
 
-d) The reduction overhead reduces the speedup versus the ideal (no-reduction) case. What fraction of the theoretical speedup is actually achieved for each SIMD implementation?
+d) 归约开销降低了相对于理想情况（无归约）的加速比。每个 SIMD 实现实际达到了理论加速比的百分之多少？
 
-### Question 4.3
+### 问题 4.3
 
-Explain two reasons why a real application might achieve far lower SIMD speedup than the theoretical calculation. For each reason, give a concrete example.
+解释真实应用可能实现的 SIMD 加速比远低于理论计算的两个原因。对于每个原因，给出具体例子。
 
 ---
 
-## Section 5: False Sharing Analysis
+## 第 5 节：伪共享分析（False Sharing Analysis）
 
-### Question 5.1
+### 问题 5.1
 
-Consider the following code running on a dual-core processor with 64-byte cache lines:
+考虑以下在双核处理器上运行的代码，缓存行大小为 64 字节：
 
 ```c
 struct {
-    int x;  // Thread 0 updates this field (10M iterations)
-    int y;  // Thread 1 updates this field (10M iterations)
+    int x;  // 线程 0 更新此字段（1000 万次迭代）
+    int y;  // 线程 1 更新此字段（1000 万次迭代）
 } data;
 
-// Thread 0:
+// 线程 0：
 for (int i = 0; i < 10000000; i++) {
     data.x++;
 }
 
-// Thread 1:
+// 线程 1：
 for (int i = 0; i < 10000000; i++) {
     data.y++;
 }
 ```
 
-a) Identify the problem. Why is this considered **false sharing**? Base your explanation on the memory layout of `data` and the cache line boundaries.
+a) 识别问题。为什么这被认为是**伪共享（false sharing）**？基于 `data` 的内存布局和缓存行边界解释你的答案。
 
-b) Show the struct definition after applying a proper fix using explicit padding. Assume 64-byte cache lines and that `data` is cache-line-aligned.
+b) 展示应用显式填充（explicit padding）修复后的结构体定义。假设 64 字节缓存行，且 `data` 已缓存行对齐。
 
 ```c
-// Fix: add padding to isolate x and y into separate cache lines
+// 修复：添加填充以将 x 和 y 隔离到不同的缓存行中
 struct {
     int x;
-    // padding here:
+    // 此处填充：
     ____________________________________
     int y;
 } data;
 ```
 
-c) Calculate the **slowdown factor** caused by false sharing. Assume:
-   - Access to local cache data: 50 ns per iteration
-   - Cache line transfer between cores (cache-to-cache): 100 ns per transfer
-   - Each thread runs 10,000,000 iterations
-   - MESI protocol: a write by Thread 0 invalidates Thread 1's copy, forcing a transfer on Thread 1's next access, and vice versa
-   - Each iteration incurs exactly one cache miss due to false sharing (one transfer per increment)
+c) 计算由伪共享引起的**减速因子（slowdown factor）**。假设：
+   - 访问本地缓存数据：每次迭代 50 ns
+   - 缓存行在核心之间传输（cache-to-cache）：每次传输 100 ns
+   - 每个线程运行 10,000,000 次迭代
+   - MESI 协议：线程 0 的写入会使线程 1 的副本失效，迫使线程 1 在下一次访问时传输，反之亦然
+   - 每次迭代由于伪共享恰好发生一次缓存缺失（每次递增一次传输）
 
-Calculate the total execution time per thread with false sharing vs. without false sharing, then compute the slowdown factor.
+计算存在和不存在伪共享时每个线程的总执行时间，然后计算减速因子。
 
-| Scenario                          | Time per iteration | Total time (10M iterations) |
+| 场景 | 每次迭代的时间 | 总时间（1000 万次迭代） |
 |-----------------------------------|-------------------:|----------------------------:|
-| Without false sharing (ideal)     | 50 ns              |                             |
-| With false sharing                |                    |                             |
-| **Slowdown factor**               |                    |                     _____x |
+| 无伪共享（理想情况） | 50 ns | |
+| 有伪共享 | | |
+| **减速因子** | | _____x |
 
-### Question 5.2
+### 问题 5.2
 
-Would the false sharing problem be less severe if the cache line size were 128 bytes instead of 64 bytes? Explain.
+如果缓存行大小为 128 字节而不是 64 字节，伪共享问题会更不严重吗？解释原因。
 
-### Question 5.3
+### 问题 5.3
 
-List two diagnostic tools or methods that can detect false sharing in a running multithreaded program.
-
----
-
-## Answer Guidelines
-
-- For IPC calculations (Section 1), compute the effective issue rate by weighting each dependency penalty by its frequency
-- For out-of-order questions (Section 2), distinguish the ROB's in-order commit from the RS's out-of-order issue
-- For branch prediction (Section 3), simulate the 2-bit counter state transitions step by step; then reason about TAGE's tag-match mechanism
-- For SIMD (Section 4), show the horizontal reduction tree explicitly with step counts
-- For false sharing (Section 5), compute the cache-line layout to confirm x and y share the same line
+列出两种可以检测正在运行的多线程程序中伪共享的诊断工具或方法。
 
 ---
 
-## References
+## 答题指南（Answer Guidelines）
 
-1. Hennessy, J. L. & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 6th Edition. Morgan Kaufmann, 2019. Chapters 3, 4.
+- 对于 IPC 计算（第 1 节），通过加权每个依赖惩罚的频率来计算有效发射率
+- 对于乱序执行问题（第 2 节），区分 ROB 的顺序提交（in-order commit）与 RS 的乱序发射（out-of-order issue）
+- 对于分支预测（第 3 节），逐步模拟 2 位计数器的状态转换；然后推理 TAGE 的 tag-match 机制
+- 对于 SIMD（第 4 节），显式展示带有步骤数的水平归约树
+- 对于伪共享（第 5 节），计算缓存行布局以确认 x 和 y 共享同一行
+
+---
+
+## 参考文献（References）
+
+1. Hennessy, J. L. & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 第 6 版. Morgan Kaufmann, 2019. 第 3、4 章。
 2. Seznec, A. "TAGE-SC-L Branch Predictors." *JILP*, Vol. 16, 2014.
 3. Tomasulo, R. M. "An Efficient Algorithm for Exploiting Multiple Arithmetic Units." *IBM Journal of Research and Development*, Vol. 11 No. 1, 1967, pp. 25--33.
 4. Smith, J. E. "A Study of Branch Prediction Strategies." *Proceedings of ISCA-8*, 1981.
-5. Intel Corporation. *Intel 64 and IA-32 Architectures Optimization Reference Manual*. 2023. Sections on cache and false sharing.
+5. Intel Corporation. *Intel 64 and IA-32 Architectures Optimization Reference Manual*. 2023. 关于缓存和伪共享的章节。
 6. Bolosky, W. J. & Scott, M. L. "False Sharing and Its Effect on Shared Memory Performance." *USENIX SEDMS*, 1993.

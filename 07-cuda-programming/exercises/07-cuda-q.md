@@ -1,4 +1,4 @@
-# 07 — CUDA Programming & Optimization: Exercises
+# 07 — CUDA 编程与优化：练习题
 
 > 通过以下问题验证你对 CUDA Occupancy 计算、Stream 并发、Pinned Memory、Profiling 指标解读和优化优先级排序的理解。
 
@@ -62,11 +62,11 @@ Kernel 使用的资源：
 | shared_efficiency | 0.9 |
 | stall_memory_dependency | 45% |
 
-**Questions:**
+**问题：**
 
 1. 诊断该 Kernel 的性能瓶颈是什么？请结合具体指标说明。
 2. 提出至少两个具体的优化方案来缓解这个瓶颈。对于每个方案，解释它如何影响上述指标中的一个或多个。
-3. 如果将该 Kernel 改为使用 __ldg()（Read-Only Cache）加载只读数据，预计哪个指标会改善？为什么？
+3. 如果将该 Kernel 改为使用 `__ldg()`（Read-Only Cache）加载只读数据，预计哪个指标会改善？为什么？
 
 ## 问题 5: 优化优先级排序
 
@@ -79,7 +79,7 @@ Kernel 使用的资源：
 - Instruction-Level Parallelism（指令级并行）
 - Bank Conflict 消除
 
-**Tasks:**
+**任务：**
 
 1. 将这些优化技术按照从最有效到最无效的顺序排列（针对一个既可能 Memory-Bound 又可能 Compute-Bound 的通用 Kernel）。假设你从完全没有优化的 Naive 版本开始。
 
@@ -93,9 +93,9 @@ Kernel 使用的资源：
 
 ## 参考文献
 
-1. NVIDIA. *CUDA C++ Programming Guide*. https://docs.nvidia.com/cuda/cuda-c-programming-guide/ -- Ch.3 Stream, Ch.5 Performance Guidelines
-2. NVIDIA. *CUDA C++ Best Practices Guide*. https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/ -- Occupancy, Memory Optimizations, Streams
+1. NVIDIA. *CUDA C++ Programming Guide*. https://docs.nvidia.com/cuda/cuda-c-programming-guide/ -- 第 3 章 Stream，第 5 章 Performance Guidelines
+2. NVIDIA. *CUDA C++ Best Practices Guide*. https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/ -- Occupancy、Memory Optimizations、Streams
 3. NVIDIA. *CUDA Occupancy Calculator*. https://docs.nvidia.com/cuda/cuda-occupancy-calculator/
 4. NVIDIA. *Nsight Compute Documentation*. https://docs.nvidia.com/nsight-compute/ -- Profiling Metrics
-5. Kirk, David B., and Wen-mei W. Hwu. *Programming Massively Parallel Processors*. 3rd ed., Morgan Kaufmann, 2016. -- Ch.6 Performance Considerations, Ch.9 Advanced Optimizations
+5. Kirk, David B., and Wen-mei W. Hwu. *Programming Massively Parallel Processors*. 第 3 版, Morgan Kaufmann, 2016. -- 第 6 章 Performance Considerations，第 9 章 Advanced Optimizations
 6. Harris, Mark. "How to Access Global Memory Efficiently." NVIDIA Developer Blog, 2013.

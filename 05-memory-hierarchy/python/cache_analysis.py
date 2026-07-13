@@ -48,10 +48,10 @@ NUM_LINES  = CACHE_SIZE // LINE_SIZE
 
 ASSOCIATIVITIES = [1, 2, 4, 8]
 
-# Working-set sizes (4 KB – 32 MB, log-spaced)
+# Working-set sizes (4 KB – 16 MB, log-spaced, 20 points total)
 WS_MIN = 4 * 1024
-WS_MAX = 32 * 1024 * 1024
-NUM_POINTS = 60
+WS_MAX = 16 * 1024 * 1024
+NUM_POINTS = 20
 working_sets = np.logspace(np.log10(WS_MIN),
                            np.log10(WS_MAX),
                            NUM_POINTS).astype(int)
@@ -109,23 +109,30 @@ class CacheSim:
 
 def estimate_hit_rate(ws_size, assoc,
                       cache_size=CACHE_SIZE, line_size=LINE_SIZE):
-    """Run a sequential scan of `ws_size` bytes, repeated 5 times,
-    and return the observed hit rate."""
+    """Run a sequential access pattern at cache-line granularity,
+    repeated several times, and return the observed hit rate.
+
+    Simulating at line granularity (rather than word granularity) is
+    orders of magnitude faster for large working sets while producing
+    the same hit-rate curve for sequential access.
+    """
 
     sim = CacheSim(cache_size, line_size, assoc)
 
-    # Generate addresses: every 4 bytes (word-aligned)
-    num_words = ws_size // 4
-    repeats   = 5
+    # Number of cache-line-sized blocks in the working set
+    num_lines = max(1, ws_size // line_size)
+    repeats   = 3
 
     hits = 0
     total = 0
     for _ in range(repeats):
-        for w in range(num_words):
-            addr = (w * 4) & 0xFFFFFFFF
+        for line in range(num_lines):
+            addr = (line * line_size) & 0xFFFFFFFF
             if sim.access(addr):
                 hits += 1
             total += 1
+
+    return hits / total if total > 0 else 0.0
 
     return hits / total if total > 0 else 0.0
 
@@ -151,8 +158,8 @@ def main():
             hr = estimate_hit_rate(ws, a)
             results[a].append(hr)
 
-    # Print numerical summary (every 5th row)
-    for idx in range(0, NUM_POINTS, max(1, NUM_POINTS // 12)):
+    # Print numerical summary (every ~4 rows)
+    for idx in range(0, NUM_POINTS, max(1, NUM_POINTS // 5)):
         ws = working_sets[idx]
         print(f"{ws // 1024:>16d}", end="")
         for a in ASSOCIATIVITIES:

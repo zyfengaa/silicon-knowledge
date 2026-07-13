@@ -1,14 +1,14 @@
-# Module 03: CPU Pipeline -- Exercises
+# 模块 03：CPU 流水线（CPU Pipeline）-- 练习题
 
-## 03-pipeline-q.md: Questions and Problems
+## 03-pipeline-q.md：问题与练习
 
 ---
 
-## Section 1: Hazard Identification
+## 第 1 节：冒险识别（Hazard Identification）
 
-### Question 1.1
+### 问题 1.1
 
-Identify the hazard type in this instruction sequence:
+识别以下指令序列中的冒险类型：
 
 ```assembly
 lw  x1, 0(x2)
@@ -16,24 +16,24 @@ add x3, x1, x4
 sub x5, x1, x6
 ```
 
-Consider RAW data hazards. For each dependent pair, identify whether forwarding can resolve it, or if a stall is needed. Explain why.
+考虑 RAW 数据冒险（data hazard）。对于每一对依赖关系，判断转发（forwarding）能否解决它，或者是否需要插入气泡（stall）。解释原因。
 
-### Question 1.2
+### 问题 1.2
 
-For each of the following instruction pairs, identify all RAW hazards. For each hazard, state:
-- Which instruction produces the value and which consumes it
-- Which pipeline stage the value becomes available (for the producer)
-- Which pipeline stage the value is needed (for the consumer)
-- Whether forwarding can resolve it, or whether a stall is needed
+对于以下每对指令，识别所有 RAW 冒险。对于每个冒险，指出：
+- 哪条指令产生值，哪条指令消费值
+- 值在哪个流水线阶段变得可用（对于生产者）
+- 值在哪个流水线阶段被需要（对于消费者）
+- 转发能否解决它，或者是否需要插入气泡
 
-a) `add x1, x2, x3` followed by `sub x4, x1, x5`
-b) `lw x1, 0(x2)` followed by `add x4, x1, x5`
-c) `lw x1, 0(x2)` followed by `sw x1, 0(x3)`
-d) `add x1, x2, x3` followed by `addi x1, x1, 1`
+a) `add x1, x2, x3` 后跟 `sub x4, x1, x5`
+b) `lw x1, 0(x2)` 后跟 `add x4, x1, x5`
+c) `lw x1, 0(x2)` 后跟 `sw x1, 0(x3)`
+d) `add x1, x2, x3` 后跟 `addi x1, x1, 1`
 
-### Question 1.3
+### 问题 1.3
 
-Which of the following instruction sequences contain WAW (Write After Write) or WAR (Write After Read) hazards? Explain why these hazards do or do not occur in the 5-stage in-order RISC pipeline.
+以下哪些指令序列包含 WAW（Write After Write）或 WAR（Write After Read）冒险？解释这些冒险在 5 级顺序 RISC 流水线中为什么会发生或不会发生。
 
 a) `add x1, x2, x3` / `sub x1, x4, x5`
 b) `lw x1, 0(x2)` / `add x3, x1, x4` / `sw x5, 0(x1)`
@@ -41,11 +41,11 @@ c) `sw x1, 0(x2)` / `add x1, x3, x4`
 
 ---
 
-## Section 2: Pipeline Execution Diagram
+## 第 2 节：流水线执行图（Pipeline Execution Diagram）
 
-### Question 2.1
+### 问题 2.1
 
-Draw a pipeline execution diagram (in text/ASCII form) for this instruction sequence WITH forwarding enabled:
+为以下指令序列画出**开启转发**时的流水线执行图（文本/ASCII 格式）：
 
 ```assembly
 add x1, x2, x3
@@ -53,57 +53,57 @@ lw  x4, 0(x1)
 add x5, x4, x6
 ```
 
-Show each instruction's IF/ID/EX/MEM/WB stages cycle-by-cycle for cycles 1--9. Mark which cycles forwarding resolves the data dependencies.
+展示每条指令在周期 1-9 中各阶段（IF/ID/EX/MEM/WB）的执行情况。标记哪些周期通过转发解决了数据依赖。
 
-### Question 2.2
+### 问题 2.2
 
-Now draw the pipeline execution diagram for the same instruction sequence WITHOUT forwarding. How many additional stall cycles are needed? Show the diagram for cycles 1--11.
+现在为相同的指令序列画出**不开启转发**时的流水线执行图。需要多少个额外的气泡周期？展示周期 1-11 的执行图。
 
 ---
 
-## Section 3: CPI Calculation
+## 第 3 节：CPI 计算（CPI Calculation）
 
-### Question 3.1
+### 问题 3.1
 
-Calculate the CPI for a 5-stage pipeline given these hazard frequencies:
-- 20% loads, of which 30% cause RAW stalls
-- 15% branches, of which 60% are taken, with a 2-cycle penalty (predict-not-taken strategy)
-- 5% structural hazards causing 1-cycle stalls
+给定以下冒险频率，计算 5 级流水线的 CPI：
+- 20% 的指令是 load，其中 30% 导致 RAW 气泡
+- 15% 的指令是分支（branch），其中 60% 被跳转，采用预测-不跳转（predict-not-taken）策略，惩罚为 2 个周期
+- 5% 的结构冒险（structural hazard）导致 1 个周期的气泡
 
-Assume base CPI = 1.0. Show the breakdown for each hazard type.
+假设基础 CPI = 1.0。展示每种冒险类型的分解计算。
 
-### Question 3.2
+### 问题 3.2
 
-Now suppose we improve the branch predictor to achieve 90% accuracy (instead of using a static predict-not-taken strategy). The misprediction penalty is still 2 cycles, and branches are still 15% of instructions. Recalculate the CPI. How much improvement does better branch prediction provide?
+现在假设我们将分支预测器改进为达到 90% 的准确率（而不是使用静态的 predict-not-taken 策略）。预测错误的惩罚仍然是 2 个周期，分支指令仍占 15%。重新计算 CPI。更好的分支预测带来了多少改进？
 
-### Question 3.3
+### 问题 3.3
 
-Given these CPI component values from an actual benchmark run, identify which component has the largest impact on performance. Propose a hardware optimization to reduce that component:
+根据实际基准测试运行得到的以下 CPI 分量值，确定哪个分量对性能影响最大。提出一种硬件优化方案来减少该分量：
 
-| Component         | CPI Contribution |
+| 分量（Component） | CPI 贡献 |
 |-------------------|-----------------|
-| Base CPI          | 1.00            |
-| Load-use stalls   | 0.08            |
-| Branch mispredict | 0.15            |
-| Structural stalls | 0.03            |
-| Cache misses      | 0.40            |
-| **Total CPI**     | **1.66**        |
+| 基础 CPI（Base CPI） | 1.00 |
+| Load-使用气泡（Load-use stalls） | 0.08 |
+| 分支预测错误（Branch mispredict） | 0.15 |
+| 结构冒险气泡（Structural stalls） | 0.03 |
+| 缓存缺失（Cache misses） | 0.40 |
+| **总 CPI（Total CPI）** | **1.66** |
 
 ---
 
-## Section 4: Load-Use Hazards
+## 第 4 节：Load-Use 冒险（Load-Use Hazards）
 
-### Question 4.1
+### 问题 4.1
 
-Explain why load-use hazards require a stall even with full forwarding. What is the minimum stall? Why can't forwarding hardware resolve this?
+解释为什么即使有完整的转发机制，load-use 冒险仍然需要一个气泡。最少需要多少个气泡？为什么转发硬件无法解决这个问题？
 
-### Question 4.2
+### 问题 4.2
 
-How does a compiler reduce load-use stalls? Give a concrete code example showing the transformation.
+编译器如何减少 load-use 气泡？给出一个具体的代码示例，展示变换前后的效果。
 
-### Question 4.3
+### 问题 4.3
 
-Given the following instruction sequence with a load-use hazard:
+给定以下存在 load-use 冒险的指令序列：
 
 ```assembly
 lw  x1, 0(x2)
@@ -112,85 +112,85 @@ or  x5, x6, x7
 sub x8, x9, x10
 ```
 
-a) How many stall cycles are needed with full forwarding?
-b) Can the compiler reorder these instructions to eliminate the stall? Show the reordered sequence.
-c) What if the `or` instruction also depended on x1? Would reordering still help?
+a) 开启完整转发时需要多少个气泡周期？
+b) 编译器能否重新排列这些指令以消除气泡？展示重排后的序列。
+c) 如果 `or` 指令也依赖于 x1，重新排序还有帮助吗？
 
 ---
 
-## Section 5: Branch Prediction Comparison
+## 第 5 节：分支预测比较（Branch Prediction Comparison）
 
-### Question 5.1
+### 问题 5.1
 
-Compare branch penalty for predict-not-taken vs. predict-taken strategies. Given:
-- 15% branches
-- 65% taken
-- 3-cycle penalty for misprediction
+比较 predict-not-taken 和 predict-taken 策略的分支惩罚。给定：
+- 15% 的分支指令
+- 65% 被跳转（taken）
+- 预测错误的惩罚为 3 个周期
 
-Calculate the average CPI impact for each strategy. Show your work.
+计算每种策略的平均 CPI 影响。展示计算过程。
 
-### Question 5.2
+### 问题 5.2
 
-Which strategy is better for the parameters in Question 5.1, and why? At what taken fraction would the two strategies be equal?
+对于问题 5.1 中的参数，哪种策略更好，为什么？在什么跳转比例下两种策略的效果相同？
 
-### Question 5.3
+### 问题 5.3
 
-A more accurate branch predictor achieves 92% prediction accuracy with the same 15% branch frequency and 3-cycle misprediction penalty. Calculate the average CPI impact. How does this compare to the static strategies from Question 5.1?
+一个更准确的分支预测器在相同条件下（15% 分支频率，3 周期预测错误惩罚）达到了 92% 的预测准确率。计算平均 CPI 影响。与问题 5.1 中的静态策略相比如何？
 
-### Question 5.4
+### 问题 5.4
 
-Explain how a Branch Target Buffer (BTB) works. For which prediction strategy (predict-taken or predict-not-taken) is a BTB more important? Why?
-
----
-
-## Section 6: Pipeline Speedup Analysis
-
-### Question 6.1
-
-Calculate the speedup of a 5-stage pipeline over a single-cycle processor. Assume:
-- Single-cycle clock = 10 ns (all instructions take 1 cycle)
-- Pipeline clock = 2.5 ns (5 stages)
-
-Include the effect of 0.2 CPI penalty from hazards in the pipeline. Show both ideal (no hazards) and real speedup.
-
-### Question 6.2
-
-What is the maximum theoretical speedup of an N-stage pipeline over a single-cycle processor? Why is this maximum never achieved in practice? List at least three reasons.
-
-### Question 6.3
-
-A 10-stage pipeline has these parameters:
-- Single-cycle clock = 12 ns
-- Pipeline clock = 1.5 ns
-- Real CPI = 1.4 (includes all hazard effects)
-
-Calculate:
-a) Ideal speedup (no hazards, 10-stage)
-b) Real speedup
-c) What fraction of ideal performance does the real pipeline achieve?
-
-### Question 6.4
-
-Given two pipeline designs for the same ISA:
-- **Design A:** 5-stage, 2.5 ns clock, CPI = 1.1
-- **Design B:** 10-stage, 1.5 ns clock, CPI = 1.4
-
-Which design has higher throughput (instructions per second)? Show your calculation.
+解释分支目标缓冲区（Branch Target Buffer, BTB）的工作原理。对于哪种预测策略（predict-taken 或 predict-not-taken），BTB 更为重要？为什么？
 
 ---
 
-## Answer Guidelines
+## 第 6 节：流水线加速比分析（Pipeline Speedup Analysis）
 
-- For hazard identification questions (Section 1), state the hazard type clearly and explain the pipeline stages involved
-- For pipeline diagram questions (Section 2), use a table format with cycles as columns and stages as rows. Mark bubbles as "BUBBLE" and forwarding as "FWD: EX->EX" or "FWD: MEM->EX"
-- For CPI calculations (Section 3), show each term of the breakdown before summing
-- For speedup questions (Section 6), show the formula: Speedup = (Execution Time_single) / (Execution Time_pipeline) = (CPI_single * T_single) / (CPI_pipeline * T_pipeline)
+### 问题 6.1
+
+计算 5 级流水线相对于单周期处理器的加速比。假设：
+- 单周期时钟 = 10 ns（所有指令需要 1 个周期）
+- 流水线时钟 = 2.5 ns（5 级）
+
+考虑流水线中由冒险导致的 0.2 CPI 惩罚。展示理想情况（无冒险）和实际加速比。
+
+### 问题 6.2
+
+N 级流水线相对于单周期处理器的最大理论加速比是多少？为什么这个最大值在实践中永远无法达到？列出至少三个原因。
+
+### 问题 6.3
+
+一个 10 级流水线的参数如下：
+- 单周期时钟 = 12 ns
+- 流水线时钟 = 1.5 ns
+- 实际 CPI = 1.4（包含所有冒险影响）
+
+计算：
+a) 理想加速比（无冒险，10 级）
+b) 实际加速比
+c) 实际流水线达到了理想性能的百分之多少？
+
+### 问题 6.4
+
+给定同一 ISA 的两种流水线设计：
+- **设计 A：** 5 级，2.5 ns 时钟，CPI = 1.1
+- **设计 B：** 10 级，1.5 ns 时钟，CPI = 1.4
+
+哪种设计的吞吐量更高（每秒指令数）？展示计算过程。
 
 ---
 
-## References
+## 答题指南（Answer Guidelines）
 
-1. Patterson, D. A., & Hennessy, J. L. *Computer Organization and Design: The Hardware/Software Interface*. RISC-V Edition. Morgan Kaufmann, 2017. Chapter 4.
-2. Hennessy, J. L., & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 6th Edition. Morgan Kaufmann, 2019. Chapter 3.
-3. Harris, S., & Harris, D. *Digital Design and Computer Architecture: RISC-V Edition*. Morgan Kaufmann, 2021. Chapters 6, 7.
+- 对于冒险识别问题（第 1 节），明确说明冒险类型并解释涉及的流水线阶段
+- 对于流水线图问题（第 2 节），使用表格格式，以周期为列、阶段为行。将气泡标记为"BUBBLE"，将转发标记为"FWD: EX->EX"或"FWD: MEM->EX"
+- 对于 CPI 计算（第 3 节），在求和之前展示分解的每一项
+- 对于加速比问题（第 6 节），展示公式：Speedup = (Execution Time_single) / (Execution Time_pipeline) = (CPI_single * T_single) / (CPI_pipeline * T_pipeline)
+
+---
+
+## 参考文献（References）
+
+1. Patterson, D. A., & Hennessy, J. L. *Computer Organization and Design: The Hardware/Software Interface*. RISC-V Edition. Morgan Kaufmann, 2017. 第 4 章。
+2. Hennessy, J. L., & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 第 6 版. Morgan Kaufmann, 2019. 第 3 章。
+3. Harris, S., & Harris, D. *Digital Design and Computer Architecture: RISC-V Edition*. Morgan Kaufmann, 2021. 第 6、7 章。
 4. Smith, J. E. "A Study of Branch Prediction Strategies." *Proceedings of the 8th Annual International Symposium on Computer Architecture (ISCA)*, 1981, pp. 135--148.
