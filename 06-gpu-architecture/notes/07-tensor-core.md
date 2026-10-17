@@ -106,6 +106,8 @@ Tensor Core 的核心能力是**混合精度计算**：
 | INT4 | INT4 | INT32 | ~4× |
 | FP8 (E4M3/E5M2) | FP8 | FP32 | ~2× |
 
+> 这张表描述的是“格式 → 相对吞吐”的结果。每个比例背后的硬件原因（每指令 K 维、累加器宽度、数据通路打包）见 [12 精度与硬件](12-precision-hardware.md)。
+
 **TF32（Tensor Float 32）**—— Ampere 引入：
 - 19-bit 格式：1-bit 符号 + 8-bit 指数（同 FP32）+ 10-bit 尾数（同 FP16）
 - 输入尾数从 FP32 的 23-bit 减少到 10-bit，累加仍为 FP32

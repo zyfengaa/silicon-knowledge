@@ -22,6 +22,8 @@
 - INT8乘加运算的能耗约为FP32的 $\frac{1}{18}$；
 - 在相同的芯片面积预算下，可以部署更多的INT8计算单元，从而实现更高的峰值吞吐。
 
+> 量化为什么能同时降低面积、能耗和带宽需求，取决于乘法器位宽、累加器和存储宽度；完整的硬件链路见 [06-12 精度与硬件](../../06-gpu-architecture/notes/12-precision-hardware.md)。
+
 ## 2. 均匀量化（Uniform Quantization）的数学原理
 
 ### 2.1 仿射量化（Affine Quantization）

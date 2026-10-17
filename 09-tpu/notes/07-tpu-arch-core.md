@@ -27,6 +27,8 @@ $$
 
 TPU v2/v3 每个 MXU 仍为 $128 \times 128$（16,384 个 PE），但 v2 每芯片有 2 个 MXU、v3 每芯片有 4 个 MXU。到 TPU v4/v5p，单个 MXU 仍是 $128 \times 128$（16,384 个 PE），变化的是芯片内的数量与组织方式：每芯片包含 **2 个 TensorCore**，每个 TensorCore 集成 **4 个 MXU**，即每芯片 **8 个 MXU、$8 \times 16{,}384 = 131{,}072$ 个 MAC**。单个 MXU 扩大到 $256 \times 256$ 要到 v6e（Trillium）。与此同时，TPU v2 引入了 BF16（Brain Floating Point 16）数据类型的原生支持，相比 v1 的 INT8，BF16 具有更大的动态范围，更适合训练场景（训练时累积精度保持 FP32）。
 
+> MXU 的乘加器位宽在流片时固定，这是 TPU 用 INT8/BF16/FP8 划分代际的根本原因。精度与执行单元的完整关系见 [06-12 精度与硬件](../../06-gpu-architecture/notes/12-precision-hardware.md)。
+
 从 v2 到 v5p，MXU 的基本结构保持不变，但阵列的利用率（utilization）、时钟频率、数据搬运路径等都得到了持续优化。
 
 ### 关于“16 个周期”的口径

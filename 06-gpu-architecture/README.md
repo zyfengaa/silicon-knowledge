@@ -19,6 +19,7 @@
 | 09 | **架构演进** | NVIDIA Fermi → Kepler → Maxwell → Pascal → Volta → Turing → Ampere → Hopper → Blackwell |
 | 10 | **AMD / Intel GPU** | AMD CDNA 3、Intel Xe HPC 架构简介 |
 | 11 | **Hopper 与 Blackwell** | TMA、Thread Block Cluster、WGMMA、tcgen05/TMEM、FP4/FP6、GB200 NVL72 |
+| 12 | **精度与硬件** | 精度由哪些执行单元、数据通路、累加器和存储宽度决定；TF32/FP16/FP8/FP4 的吞吐比例从何而来 |
 
 ## 前置知识
 
@@ -52,6 +53,7 @@
 - [ ] 能画出 GPU 的内存层次并说出每层的用途和延迟量级
 - [ ] 理解合并访问的条件，能识别什么样的访问模式会导致带宽浪费
 - [ ] 能说清 Tensor Core 解决了什么问题（矩阵乘加速 + 降低精度）
+- [ ] 能说清一种精度由哪些硬件模块决定，以及位宽如何影响吞吐、面积和能耗
 
 ## 参考文献
 

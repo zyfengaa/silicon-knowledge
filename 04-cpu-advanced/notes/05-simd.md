@@ -29,6 +29,8 @@ a1 + b1               a1 a2 a3 a4
 | AVX-512 | 512-bit | 32 (ZMM) | 浮点 & 整数 + mask | 2016 (Knights Landing) |
 | AVX-512 (主流) | 512-bit | 32 (ZMM) | Intel Ice Lake, Rocket Lake | 2019~2021 |
 
+> SIMD 的位宽决定每条指令的 lanes 数，但一种精度能否使用还取决于执行单元与 ISA。精度与硬件的完整关系见 [06-12 精度与硬件](../../06-gpu-architecture/notes/12-precision-hardware.md)。
+
 ### ARM 架构
 
 | 扩展 | 特点 | 数据宽度 | 引入 |

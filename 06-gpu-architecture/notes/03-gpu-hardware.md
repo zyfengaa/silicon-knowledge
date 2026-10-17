@@ -95,6 +95,8 @@ H100 每个 SM 有 4 个分区，每个分区包含：
 
 因此每个 SM 合计 128 FP32、64 INT32、64 FP64、32 个 LD/ST 和 **4 个 Tensor Core**（132 个 SM 的 H100 SXM 共 528 个 Tensor Core）。
 
+> 精度不只是“软件设置”：不同格式会落到不同的物理单元。FP32/INT32/FP64 单元与 Tensor Core 的分工、以及低精度为什么吞吐更高，见 [12 精度与硬件](12-precision-hardware.md)。
+
 ---
 
 ## 3. CUDA Core（FP32 单元）
