@@ -123,12 +123,11 @@ batch_f = jax.vmap(f)        # 自动向量化为批量函数
 output = batch_f(X)          # X: (N, D) -> output: (N, K)
 ```
 
-`vmap` 并不只是在外部加一个循环，而是通过 XLA 的 HLO 重写在计算图中插入批处理维度，使得循环在编译器的控制流优化中被高效处理。d
+`vmap` 并不只是在外部加一个循环，而是通过 XLA 的 HLO 重写在计算图中插入批处理维度，使得循环在编译器的控制流优化中被高效处理。
 
 ### pmap（并行映射）
 
 `pmap` 将计算分布到多个 TPU 设备上。它在语义上类似于 `vmap`，但将批处理维度映射到设备维度（device dimension），每个设备计算一部分数据：
-
 ```python
 # 在 8 个 TPU 核心上并行
 parallel_forward = jax.pmap(forward, axis_name='batch')
@@ -140,22 +139,29 @@ output = parallel_forward(x_sharded, w)  # x_sharded 已在 8 个核心上分片
 - 梯度计算的自动同步（all-reduce）
 - 结果收集与合并
 
+注意：`pmap` 已进入维护模式（legacy），新代码通常优先使用 `jax.jit` 配合 `NamedSharding`/`in_shardings`，或在需要显式设备级编程时使用 `shard_map`。
+
 ### shard_map
 
-`shard_map` 是 JAX 中较新的并行变换，提供了对 GSPMD 更细粒度的控制：
+`shard_map` 是 JAX 中较新的并行变换，提供了对 GSPMD 更细粒度的控制。它的参数名是 `in_specs` / `out_specs`，并且**不会**自动插入跨设备通信——通信必须显式写出：
 
 ```python
-from jax.sharding import PartitionSpec
+from functools import partial
+import numpy as np
+from jax.sharding import Mesh, PartitionSpec as P
 from jax.experimental.shard_map import shard_map
 
 mesh = Mesh(np.array(jax.devices()), ('batch',))
-@partial(shard_map, mesh=mesh, spec_in=PartitionSpec('batch', None),
-         spec_out=PartitionSpec('batch', None))
+
+@partial(shard_map, mesh=mesh,
+         in_specs=(P('batch'), P()), out_specs=P('batch'))
 def sharded_forward(x, w):
-    return jnp.dot(x, w)  # GSPMD 自动插入通信操作
+    # 每个设备拿到的是本地分片；若需要跨设备归约，必须显式调用
+    # jax.lax.psum / jax.lax.all_gather / jax.lax.reduce_scatter 等
+    return jnp.dot(x, w)
 ```
 
-`shard_map` 的优势在于用户可以精确控制每个维度如何在设备网格上分片，而 GSPMD 自动推导出所需的跨设备通信。
+`shard_map` 的优势在于用户可以精确控制每个维度如何在设备网格上分片，并对每台设备上的本地计算与通信做显式编排；代价是通信不再由 GSPMD 自动推导，需要用户自行保证语义正确。
 
 ## XLA 与 JAX 的协作流程
 
@@ -180,5 +186,5 @@ JAX 与 XLA 的协作流程如下：
 3. Frostig, R., et al. "Compiling Machine Learning Programs via High-Level Differentiable Programming." Program Transformations for Machine Learning Workshop (NeurIPS), 2018.
 4. Xu, Y., et al. "GSPMD: General and Scalable Parallelization for ML Computation Graphs." arXiv:2105.04663, 2021.
 5. Jouppi, N. P., et al. "In-Datacenter Performance Analysis of a Tensor Processing Unit." ISCA '17, 2017.
-6. Sabne, A., et al. "Modeling the XLA Compiler for TPU Performance." Google Research Technical Report, 2020.
+6. Sabne, A. "XLA: Compiling Machine Learning for Peak Performance." Google Research Technical Report, 2020.
 7. Paszke, A., et al. "PyTorch: An Imperative Style, High-Performance Deep Learning Library." NeurIPS, 2019.

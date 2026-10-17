@@ -7,11 +7,16 @@
  *     版本 2: 每个 Kernel 在独立 Stream 上并发执行
  *   比较两种方式的总耗时，观察 Hyper-Q 带来的并发收益。
  *
+ * 注意：要让多个 Kernel 真正并发，单个 Kernel 的 Grid 不能已经占满 GPU。
+ * 本程序使用 grid-stride loop，并把每个 Kernel 的 Grid 限制为
+ * SM 数量的 2 倍，从而给其他 Stream 的 Kernel 留出 SM 资源。
+ *
  * 编译: nvcc -o multi_stream multi_stream.cu
  * 运行: ./multi_stream
  */
 
 #include <stdio.h>
+#include <math.h>
 #include <cuda_runtime.h>
 
 #define CUDA_CHECK(call) do {                                      \
@@ -25,11 +30,13 @@
 
 // ---------------------------------------------------------------------------
 // 计算密集型 Kernel: 大量浮点运算，使 Kernel 成为 Compute-Bound
-// 每个线程对输入值做多次乘加运算
+// 使用 grid-stride loop，使 Grid 大小可以与数据量解耦，
+// 从而把每个 Kernel 的 Grid 限制在 SM 数量级别，留出并发空间
 // ---------------------------------------------------------------------------
 __global__ void compute_kernel(const float *in, float *out, int n, int iters) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) {
+    for (int idx = blockIdx.x * blockDim.x + threadIdx.x;
+         idx < n;
+         idx += blockDim.x * gridDim.x) {
         float v = in[idx];
         // 大量浮点运算：iters 次迭代，每次包含 3 次 FMA 操作
         #pragma unroll
@@ -65,13 +72,17 @@ int main() {
     // -----------------------------------------------------------------------
     const int N          = 1 << 24;     // 每 Kernel 16,777,216 个元素
     const int NUM_KERNELS = 4;           // 4 个 Kernel
-    const int ITERS       = 128;         // 每元素计算迭代次数
+    const int ITERS       = 64;          // 每元素计算迭代次数
     const size_t BYTES    = N * sizeof(float);
     const int BLOCK_SIZE  = 256;
-    const int GRID_SIZE   = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    const int BLOCKS_PER_SM = 2;         // 每 Kernel 每 SM 只用 2 个 Block
 
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
+
+    // 关键：Grid 只覆盖 SM 数量级别，单个 Kernel 不会占满 GPU，
+    // 不同 Stream 的 Kernel 才有机会真正并发
+    const int GRID_SIZE = prop.multiProcessorCount * BLOCKS_PER_SM;
 
     printf("==============================================================\n");
     printf("  Multi-Stream: Serial vs Concurrent Kernel Execution\n");
@@ -85,7 +96,7 @@ int main() {
     printf("N per kernel:         %d (%.2f MB)\n", N,
            (double)BYTES / (1024 * 1024));
     printf("Compute iterations:   %d per element\n", ITERS);
-    printf("Grid:                 %d blocks, %d threads/block\n",
+    printf("Grid:                 %d blocks x %d threads (per kernel)\n",
            GRID_SIZE, BLOCK_SIZE);
     printf("--------------------------------------------------------------\n");
 
@@ -250,8 +261,9 @@ int main() {
                     v = v * v - 0.3f;
                 }
                 float expected = v;
-                if (abs(check[j] - expected) > 1e-4 &&
-                    abs(check[j] - expected) / max(1.0f, abs(expected)) > 1e-4) {
+                if (fabsf(check[j] - expected) > 1e-4f &&
+                    fabsf(check[j] - expected) /
+                        fmaxf(1.0f, fabsf(expected)) > 1e-4f) {
                     printf("  Kernel %d, element %d: got %f, expected %f\n",
                            i, j, check[j], expected);
                     all_ok = false;

@@ -80,7 +80,7 @@ A  B | Y = A NOR B = (A+B)'
 
 ### Why NAND and NOR Are Universal
 
-Any Boolean function can be implemented using only NAND gates (or only NOR gates). This is economically significant: a manufacturer can produce just one gate type and build any circuit.
+Any Boolean function can be implemented using only NAND gates (or only NOR gates). This is theoretically important: one gate type is sufficient for any circuit. In practice, standard-cell libraries provide many gate types, because a NAND-only implementation can be slower and larger.
 
 **Constructing basic gates from NAND**:
 
@@ -131,7 +131,7 @@ CMOS (Complementary Metal-Oxide-Semiconductor) is the dominant fabrication techn
 - **Pull-up network (PUN)**: PMOS transistors connecting output to Vdd (logic 1).
 - **Pull-down network (PDN)**: NMOS transistors connecting output to GND (logic 0).
 
-The two networks are **complementary**: when one is conducting, the other is off. This means CMOS gates consume negligible static power (current flows only during switching).
+The two networks are **complementary**: when one is conducting, the other is off. Ideally, static CMOS consumes no static power when it is not switching; in real advanced processes, subthreshold and gate leakage make static power significant, so "negligible static power" is only a first-order model.
 
 ### CMOS Inverter
 
@@ -172,9 +172,9 @@ NMOS transistors in parallel, PMOS in series. A=1 or B=1 yields Y=0; A=0 and B=0
 
 1. Mano, M. M., & Ciletti, M. D. (2018). *Digital Design: With an Introduction to the Verilog HDL, VHDL, and SystemVerilog* (6th ed.). Pearson. Chapter 1: Digital Systems and Binary Numbers; Chapter 2: Boolean Algebra and Logic Gates.
 
-2. Patterson, D. A., & Hennessy, J. L. (2017). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Appendix B: The Basics of Logic Design.
+2. Patterson, D. A., & Hennessy, J. L. (2013). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Appendix B: The Basics of Logic Design.
 
-3. Weste, N. H. E., & Harris, D. (2010). *CMOS VLSI Design: A Circuits and Systems Perspective* (4th ed.). Addison-Wesley. Chapter 1: Introduction; Chapter 5: The CMOS Inverter.
+3. Weste, N. H. E., & Harris, D. (2010). *CMOS VLSI Design: A Circuits and Systems Perspective* (4th ed.). Addison-Wesley. Chapter 1: Introduction; Chapter 5: Power.
 
 4. Rabaey, J. M., Chandrakasan, A., & Nikolic, B. (2003). *Digital Integrated Circuits: A Design Perspective* (2nd ed.). Prentice Hall. Chapter 5: The CMOS Inverter and Its Static Characteristics.
 

@@ -199,7 +199,7 @@ for (int i = 0; i < N; i += 4) {
 | GCC (GCC 12+) | `-O2`（默认启用） |
 | Clang | `-O2 -fvectorize` |
 | ICC | `-O2 -xHOST` |
-| MSVC | `/O2 /Qvec` |
+| MSVC | `/O2 /arch:AVX2`（或 `/arch:AVX512`） |
 
 ### 限制条件
 
@@ -266,7 +266,7 @@ void add_arrays_avx(const float* restrict A,
 ### 理论加速比
 
 ```
-理论加速比 = SIMD 向量化宽度 / 标量元素大小
+理论加速比 = 向量位宽 / 标量元素位宽
 ```
 
 | 数据类型 | SSE (128) | AVX (256) | AVX-512 |
@@ -307,6 +307,6 @@ void add_arrays_avx(const float* restrict A,
 - Intel Corporation. *Intel Intrinsics Guide*. https://www.intel.com/content/www/us/en/docs/intrinsics-guide/
 - ARM Limited. *ARM Architecture Reference Manual for ARMv8-A*, Chapter A1 (NEON).
 - ARM Limited. *ARM Architecture Reference Manual SVE Supplement*, ARMv8.2.
-- Patterson, D. A. & Hennessy, J. L. *Computer Organization and Design RISC-V Edition*, Chapter 3: SIMD and Vector Processing.
+- Patterson, D. A. & Hennessy, J. L. *Computer Organization and Design RISC-V Edition*, Chapter 6: Parallel Processors from Client to Cloud.
 - Stephens, N. et al. "The ARM Scalable Vector Extension." *IEEE Micro*, 2017.
-- Hennessy, J. L. & Patterson, D. A. *Computer Architecture: A Quantitative Approach*, 6th Edition, Chapter 3: Vector SIMD Architectures.
+- Hennessy, J. L. & Patterson, D. A. *Computer Architecture: A Quantitative Approach*, 6th Edition, Chapter 4: Data-Level Parallelism in Vector, SIMD, and GPU Architectures.

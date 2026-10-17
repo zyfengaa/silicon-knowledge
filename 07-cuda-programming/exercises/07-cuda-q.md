@@ -53,14 +53,14 @@ Kernel 使用的资源：
 
 ## 问题 4: Profiling 指标解读
 
-你通过 Nsight Systems 或 nvprof 对某个 CUDA Kernel 进行 Profiling，得到以下指标：
+你通过 Nsight Compute（`ncu`）对某个 CUDA Kernel 进行 Profiling，得到以下指标（`nvprof` 已在 CUDA 12 中移除，其 `gld_efficiency` 等旧指标不再使用）：
 
-| 指标 | 值 |
+| 指标（ncu） | 值 |
 |------|-----|
-| achieved_occupancy | 0.45 |
-| gld_efficiency | 0.25 |
-| shared_efficiency | 0.9 |
-| stall_memory_dependency | 45% |
+| Memory Throughput（占峰值） | 25% |
+| Achieved Occupancy | 45% |
+| L1/TEX Hit Rate | 90% |
+| Warp Stall: Long Scoreboard | 45% |
 
 **问题：**
 

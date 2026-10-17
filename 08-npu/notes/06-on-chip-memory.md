@@ -13,7 +13,7 @@ Horowitz (2014) 及后续研究给出了一组被广泛引用的能耗数据（�
 | 32bit SRAM 读（32KB） | 10 | ~3× |
 | 32bit DRAM 读 | 640 | ~200× |
 
-从表中可以直观看到：**一次DRAM访问的能耗大约是一次SRAM访问的50-100倍**，更是一次MAC运算的200倍。这构成了神经网络加速器设计的基本约束：**减少DRAM访问是降低功耗最有效的途径**。
+从表中可以直观看到：**一次DRAM访问的能耗大约是一次SRAM访问的64-128倍**，更是一次MAC运算的200倍。这构成了神经网络加速器设计的基本约束：**减少DRAM访问是降低功耗最有效的途径**。
 
 考虑到数据搬运（data movement）在推理总能耗中占比超过80%（据NVIDIA和Google的多份报告），如何通过片上存储系统最大化数据复用、最小化片外访问，就成为了NPU架构设计的首要问题。
 
@@ -27,9 +27,9 @@ Horowitz (2014) 及后续研究给出了一组被广泛引用的能耗数据（�
 
 不同设计的缓冲区大小差异很大：
 
-- **DianNao**（Chen et al., 2014）：采用44KB的片上SRAM（NBin：输入缓冲16KB，NBout：输出缓冲16KB，SB：权重缓冲2KB，以及额外的NFU内部寄存器）。这一设计证明了即使在小缓冲区下，通过精心设计的数据流也能获得可观能效。
+- **DianNao**（Chen et al., 2014）：采用 44KB 的片上 SRAM，其中输入缓冲 NBin 16KB、输出缓冲 NBout 16KB、权重缓冲 SB 为 2KB × 6 banks（合计 12KB）。这一设计证明了即使在小缓冲区下，通过精心设计的数据流也能获得可观能效。
 - **Eyeriss**（Chen et al., 2016）：采用108KB的片上SRAM（分为全局缓冲和行缓冲两级），支撑其**行固定（Row-Stationary）**数据流。更大的缓冲区允许更灵活的数据复用策略。
-- **TPU v1**（Jouppi et al., 2017）：拥有28MB的统一SRAM缓冲区（称为统一缓冲UF），服务于256×256的脉动阵列。28MB足以容纳ResNet-50的中间激活数据，使整个推理过程无需回写DRAM。
+- **TPU v1**（Jouppi et al., 2017）：片上存储合计 28 MiB，其中 **24 MiB 统一缓冲区（Unified Buffer, UB）** 服务于 $256 \times 256$ 的脉动阵列，另有 **4 MiB 权重 FIFO**。28 MiB 不能全部算作 UB，也不足以容纳 ResNet-50 的全部中间激活；权重和激活仍需与片外 DDR3 交换。
 
 从44KB到28MB的增长反映了设计权衡：更大的缓冲区减少DRAM访问，但增加芯片面积和SRAM泄漏功耗。最优值取决于目标模型的激活尺寸、权重尺寸和批量大小。
 
@@ -45,9 +45,12 @@ Horowitz (2014) 及后续研究给出了一组被广泛引用的能耗数据（�
 
 输入特征图驻留在片上，权重按需加载。适合输入特征图尺寸小（如深度可分离卷积的逐点卷积）的情况。Eyeriss的设计支持输入复用模式。
 
-### 3. 输出复用（Output Stationary / Row-Stationary）
+### 3. 输出复用（Output Stationary）与行固定（Row Stationary）
 
-部分和在片上累加，减少对DRAM的读写压力。**行固定（Row-Stationary）**是Eyeriss提出的核心创新：
+部分和在片上累加，减少对DRAM的读写压力。**行固定（Row-Stationary, RS）**是Eyeriss提出的核心创新，它与输出固定（OS）并不等同：
+
+- OS 把每个输出像素的部分和固定在同一个 PE 内累加，权重和输入都流动；
+- RS 则让每个 PE 固定一组滤波器行与对应的输入行，部分和通过 NoC 在 PE 之间传递。
 
 - 基本调度单元是**一行卷积窗口**的数据。
 - 每个PE处理一组特定的输入行和权重，在本地累加部分和。
@@ -80,8 +83,8 @@ Raghunathan等将CNN中的数据复用归纳为三个层次：
 
 ## 参考文献
 
-1. Chen, Y.-H., Krishna, T., Emer, J., & Sze, V. "Eyeriss: An Energy-Efficient Reconfigurable Accelerator for Deep Convolutional Neural Networks." ISCA 2016.
-2. Chen, Y.-H., Krishna, T., Emer, J., & Sze, V. "Eyeriss v2: A Flexible Accelerator for Emerging Deep Neural Networks." IEEE Journal of Solid-State Circuits (JSSC), 2018.
+1. Chen, Y.-H., Emer, J., & Sze, V. "Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks." ISCA 2016.
+2. Chen, Y.-H., Yang, T.-J., Emer, J., & Sze, V. "Eyeriss v2: A Flexible Accelerator for Emerging Deep Neural Networks on Mobile Devices." IEEE Journal on Emerging and Selected Topics in Circuits and Systems (JETCAS), 9(2), 2019.
 3. Chen, T., et al. "DianNao: A Small-Footprint High-Throughput Accelerator for Ubiquitous Machine-Learning." ASPLOS 2014.
 4. Jouppi, N. P., et al. "In-Datacenter Performance Analysis of a Tensor Processing Unit." ISCA 2017.
 5. Horowitz, M. "Computing's Energy Problem (and what we can do about it)." ISSCC 2014.

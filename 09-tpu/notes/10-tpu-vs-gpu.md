@@ -10,19 +10,19 @@ Google TPU 和 NVIDIA GPU 是当今 AI 加速器市场中最具影响力的两�
 |---------|-------------|-------------|
 | **核心架构** | 脉动阵列（Systolic Array）— 确定性数据流 | SIMT（单指令多线程）— 大量并行线程 |
 | **计算粒度** | CISC 指令，一条指令覆盖数千次运算 | SIMT warp（32线程），细粒度调度 |
-| **代表性计算单元** | MXU ($128 \times 256$ PE 阵列) | Tensor Core ($4 \times 4$ 矩阵 $+$ 累计) |
-| **原生精度** | BF16, INT8, FP32（仅累加） | FP16, BF16, TF32, FP32, FP64, INT8, FP8 |
-| **峰值 FLOPS (单芯片)** | 约 275 TFLOPS (BF16, v4) | H100: 约 1979 TFLOPS (FP8) |
-| **内存类型** | HBM（统一内存，编译时管理） | HBM/GDDR（需显式管理） |
-| **内存容量 (单芯片)** | 32-64 GB (HBM2e, v4/v5p) | 80 GB (H100 SXM, HBM3) |
-| **内存带宽 (单芯片)** | 约 1.2-1.6 TB/s | 约 3.35 TB/s (H100, HBM3) |
+| **代表性计算单元** | MXU（v1 为 $256 \times 256$；v2/v3/v4/v5p 每个 MXU 为 $128 \times 128$，v4/v5p 每芯片 8 个 MXU；v6e 为 $256 \times 256$） | Tensor Core（$4 \times 4$ 矩阵乘加原语） |
+| **原生精度** | BF16, INT8, FP32（仅累加；v5p 起支持 FP8） | FP16, BF16, TF32, FP32, FP64, INT8, FP8 |
+| **峰值 FLOPS (单芯片)** | 约 275 TFLOPS (BF16, v4)；v5p 为 459 TFLOPS (BF16/FP8) | H100 SXM: 约 1,979 TFLOPS (FP8, dense) |
+| **内存类型** | HBM（独立设备内存，由编译器管理） | HBM/GDDR（需显式管理） |
+| **内存容量 (单芯片)** | v4: 32 GiB；v5p: 95 GiB | 80 GB (H100 SXM, HBM3) |
+| **内存带宽 (单芯片)** | v4: 约 1.2 TB/s；v5p: 2,765 GB/s | 约 3.35 TB/s (H100, HBM3) |
 | **芯片间互联** | OCS 可重构 Torus (v4+) | NVLink + NVSwitch |
 | **互联拓扑** | 3D Torus（可动态重构） | NVLink 全互联 / Dragonfly+ |
-| **互联带宽 (单向)** | 约 200 GB/s/链路 (v4) | NVLink 4: 每链路 450 GB/s (双向 900 GB/s) |
-| **Pod 规模** | 8960 芯片 (v5p) | 576 GPU (DGX GH200 SuperPod) |
+| **互联带宽 (单向)** | v4: 6 条链路 × 50 GB/s/方向（约 600 GB/s 双向） | NVLink 4: 每链路 25 GB/s/方向（双向 50 GB/s）；H100 共 18 链路、约 900 GB/s 双向 |
+| **Pod 规模** | 8960 芯片 (v5p) | 256 GPU (DGX GH200) |
 | **编程模型** | XLA/JAX/TensorFlow | CUDA/CuDNN/TensorRT/XLA |
 | **编程灵活性** | 低 — 只能通过 XLA 编译 | 高 — 完整 CUDA 编程模型 |
-| **显式内存管理** | 不需要（统一内存由 XLA 管理） | 需要（cudaMemcpy 等） |
+| **显式内存管理** | 编译器管理设备内存；host↔device 数据传输仍然存在 | 需要（cudaMemcpy 等） |
 | **生态丰富度** | 有限 — 主要面向 TPU | 极丰富 — ML, HPC, 图形, 仿真 |
 | **云部署** | 仅 Google Cloud | AWS, GCP, Azure, 私有云, 本地 |
 | **硬件获得方式** | 仅云租用 | 购买 + 云租用 |
@@ -33,9 +33,9 @@ Google TPU 和 NVIDIA GPU 是当今 AI 加速器市场中最具影响力的两�
 
 TPU 的 MXU 是脉动阵列（systolic array），其核心特点是**确定性数据流**——数据按照预定路径在 PE 阵列中流水线传播，没有分支预测、乱序执行或缓存一致性等通用处理器特性。这种设计使得计算效率（compute utilization）极高，但牺牲了编程灵活性。
 
-GPU 使用 SIMT（Single Instruction, Multiple Threads，单指令多线程）架构——成百上千个线程以 32 个为一组（warp）执行同一条指令，但各个线程可以处理不同的数据元素（通过寄存器值不同区分）。GPU 的 Tensor Core 本质上是一个 $4 \times 4$ 的微型脉动阵列，专门用于矩阵乘法。GPU 的灵活性在于它可以在矩阵计算、卷积、以及其他通用计算之间快速切换。
+GPU 使用 SIMT（Single Instruction, Multiple Threads，单指令多线程）架构——成百上千个线程以 32 个为一组（warp）执行同一条指令，但各个线程可以处理不同的数据元素（通过寄存器值不同区分）。GPU 的 Tensor Core 提供固定的矩阵乘加（MMA）原语，一次完成 $4 \times 4$（或更大）的小块矩阵乘加；它并不是脉动阵列，而是由寄存器级 MMA 指令驱动的专用计算单元。GPU 的灵活性在于它可以在矩阵计算、卷积、以及其他通用计算之间快速切换。
 
-关键的数学差异在于：TPU 的 MXU 在单条指令下一次性完成 $128 \times 256$ 庞大计算块，而 GPU Tensor Core 每次处理 $4 \times 4$ 或 $16 \times 8$ 的小块。TPU 的方式减少了指令开销，但 GPU 的方式更灵活，可以更容易地处理不规则的计算形状。
+关键的数学差异在于：TPU 的 MXU 在单条指令下完成一个 $256 \times 256$（v1）或 $128 \times 128$（v2 至 v5p 的单个 MXU；v4/v5p 每芯片 8 个 MXU 协同工作）的庞大计算块，而 GPU Tensor Core 每次处理 $4 \times 4$ 或 $16 \times 8$ 的小块。TPU 的方式减少了指令开销，但 GPU 的方式更灵活，可以更容易地处理不规则的计算形状。
 
 ### 数据精度
 
@@ -43,11 +43,13 @@ GPU 使用 SIMT（Single Instruction, Multiple Threads，单指令多线程）�
 
 TPU 从 v2 开始就引入了 BF16（Brain Floating Point 16）作为原生精度。BF16 的指数位与 FP32 相同（8 位），尾数位为 7 位，因此动态范围与 FP32 一致但精度较低。对于深度学习训练来说，BF16 的较大动态范围使得其稳定性优于 FP16，这正是 TPU 选择 BF16 的关键原因。
 
-NVIDIA GPU 除了支持 FP16 和 BF16 外，从 Hopper 架构开始还引入了 FP8（E4M3 和 E5M2 两种格式），进一步提升了计算吞吐量。FP8 相比 BF16 虽然可用精度更低，但在推理和一些训练的中间阶段已经足够。H100 在 FP8 的峰值计算性能达到 1979 TFLOPS——这显著高于 TPU v4 的 275 TFLOPS（BF16）。
+NVIDIA GPU 除了支持 FP16 和 BF16 外，从 Hopper 架构开始还引入了 FP8（E4M3 和 E5M2 两种格式），进一步提升了计算吞吐量。FP8 相比 BF16 虽然可用精度更低，但在推理和一些训练的中间阶段已经足够。H100 在 FP8 的密集（dense）峰值计算性能达到 1,979 TFLOPS——这显著高于 TPU v4 的 275 TFLOPS（BF16）；但两者并非同一精度口径，且 TPU v5p 已提供 459 TFLOPS 的 BF16/FP8 算力。
 
 ### 内存架构
 
-TPU 的统一内存（Unified Memory）架构是其区别于 GPU 的一大特色。在 TPU 中，XLA 编译器在编译时就知道每个张量的生命周期、访问模式和大小，因此可以精确地分配 HBM 空间并规划数据的搬移。这不仅消除了运行时内存管理的开销，还使得计算单元之间可以通过片上通道直接传递数据，避免内存访问。
+TPU 的编译时内存管理是其区别于 GPU 的一大特色。在 TPU 中，XLA 编译器在编译时就知道每个张量的生命周期、访问模式和大小，因此可以在设备 HBM 内精确地分配空间并规划数据搬移。这消除了大量运行时内存分配/回收开销，并使计算单元之间可以通过片上通道直接传递数据，减少对 HBM 的访问。
+
+需要澄清的是，这**不是主机与设备共享地址空间的“统一内存”**。TPU 的 HBM 仍然是独立的设备内存，host↔device 数据传输依然存在（v1 经 PCIe，后续经主机接口）。与 GPU 的差别主要在于：设备侧内存由编译器静态规划，而不是由运行时分配器管理。
 
 相比之下，GPU 需要用户（或框架）显式调用 `cudaMemcpy` 在 CPU 和 GPU 之间搬运数据。虽然 NVIDIA 也提供了统一内存（Unified Memory）API，但其实现依赖于 page fault 和缺页中断，性能开销较大。在实际训练中，大多数高性能 GPU 代码仍然使用显式的内存管理。
 
@@ -55,7 +57,7 @@ TPU 的统一内存（Unified Memory）架构是其区别于 GPU 的一大特色
 
 TPU 的 OCS 可重构 3D Torus 和 GPU 的 NVLink+NVSwitch 代表了两种不同的互联哲学：
 
-- **TPU OCS Torus**: 采用光路交换，拓扑可动态重构，实现了极高的芯片间直连带宽，适合大规模同步训练。缺点是拓扑重构的微秒级延迟在每次拓扑修改时会发生，但这对长周期的训练任务影响不大。
+- **TPU OCS Torus**: 采用光路交换，拓扑可动态重构，实现了极高的芯片间直连带宽，适合大规模同步训练。缺点是每次拓扑重构有**毫秒级**延迟（MEMS 开关 ≤5 ms，整体约 10 ms 量级，不是微秒级），但这对长周期的训练任务影响不大。
 
 - **GPU NVLink+NVSwitch**: 采用电子交换网络，NVSwitch 作为中心交换机，实现全互联拓扑——每个 GPU 可以直接访问网络中任何其他 GPU 的 HBM（NVLink 地址映射）。NVSwitch 的延迟更低（亚微秒级），全互联拓扑使得集体通信效率更高，但电子交换的功耗和端口密度限制了其扩展规模。
 

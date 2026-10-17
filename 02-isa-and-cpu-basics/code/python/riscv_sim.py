@@ -2,8 +2,10 @@
 """
 Simple RISC-V Simulator (RV32I subset)
 
-Simulates a small set of RV32I instructions: add, sub, lw, sw, beq, addi.
-Shows register and memory state after each instruction.
+Simulates a subset of RV32I: add, sub, and, or, xor, addi, andi, ori,
+lw, sw, beq, bne, blt, lui, auipc, jal, and jalr.
+
+Shows the written register and the final register/memory state.
 
 Usage:
     python3 riscv_sim.py
@@ -12,6 +14,9 @@ The program simulated computes Fibonacci numbers iteratively.
 """
 
 import struct
+
+# Data memory begins at this address; the program is loaded at address 0.
+DATA_BASE = 0x100
 
 
 class RISC_V_Simulator:
@@ -77,6 +82,8 @@ class RISC_V_Simulator:
             | 0,                                     # offset[0] = 0
             13,
         )  # B-type immediate (byte offset, PC-relative)
+        # imm_b is kept as an unsigned 32-bit pattern; use a signed view for display
+        imm_b_signed = imm_b - 0x100000000 if imm_b & 0x80000000 else imm_b
 
         # Track which register is written for display
         dest_reg = None
@@ -167,17 +174,17 @@ class RISC_V_Simulator:
             taken = False
             if funct3 == 0x00:  # BEQ
                 taken = (self.regs[rs1] == self.regs[rs2])
-                self._print_instr(f"BEQ  x{rs1}, x{rs2}, offset={imm_b}", taken)
+                self._print_instr(f"BEQ  x{rs1}, x{rs2}, offset={imm_b_signed}", taken)
 
             elif funct3 == 0x01:  # BNE
                 taken = (self.regs[rs1] != self.regs[rs2])
-                self._print_instr(f"BNE  x{rs1}, x{rs2}, offset={imm_b}", taken)
+                self._print_instr(f"BNE  x{rs1}, x{rs2}, offset={imm_b_signed}", taken)
 
             elif funct3 == 0x04:  # BLT
                 s_rs1 = self.regs[rs1] if self.regs[rs1] < 0x80000000 else self.regs[rs1] - 0x100000000
                 s_rs2 = self.regs[rs2] if self.regs[rs2] < 0x80000000 else self.regs[rs2] - 0x100000000
                 taken = (s_rs1 < s_rs2)
-                self._print_instr(f"BLT  x{rs1}, x{rs2}, offset={imm_b}", taken)
+                self._print_instr(f"BLT  x{rs1}, x{rs2}, offset={imm_b_signed}", taken)
 
             else:
                 print(f"Unknown branch: funct3={funct3}")
@@ -223,6 +230,8 @@ class RISC_V_Simulator:
             self.pc = (self.pc + imm_j) & 0xFFFFFFFF
             self._print_instr(f"JAL  x{rd}, offset={imm_j}")
             self.regs[0] = 0
+            if dest_reg is not None:
+                self._print_reg_state(dest_reg)
             return True  # PC already updated
 
         # JALR (opcode = 0x67)
@@ -233,7 +242,15 @@ class RISC_V_Simulator:
             self.pc = target
             self._print_instr(f"JALR x{rd}, x{rs1}, {imm_i}")
             self.regs[0] = 0
+            if dest_reg is not None:
+                self._print_reg_state(dest_reg)
             return True  # PC already updated
+
+        # EBREAK (0x00100073) -- halt this educational simulator
+        elif instr == 0x00100073:
+            self.running = False
+            self._print_instr("EBREAK  # halt")
+            return True
 
         else:
             print(f"Unknown instruction: opcode=0x{opcode:07b}, full=0x{instr:08X}")
@@ -273,7 +290,9 @@ class RISC_V_Simulator:
                 print("Execution halted due to error.")
                 break
 
-        if self.instruction_count >= max_instructions:
+        if not self.running:
+            print("\nProgram halted (EBREAK).")
+        elif self.instruction_count >= max_instructions:
             print(f"\nReached max instruction limit ({max_instructions}). Halting.")
 
         self._print_final_state()
@@ -287,8 +306,10 @@ class RISC_V_Simulator:
             print(instr_str)
 
     def _print_reg_state(self, rd):
-        """Display a compact view of registers that have changed."""
-        pass  # We'll show regs at end
+        """Display the value just written to the destination register."""
+        if rd == 0:
+            return
+        print(f"  -> x{rd} = 0x{self.regs[rd]:08X} ({self.regs[rd]})")
 
     def _print_final_state(self):
         """Print final register state."""
@@ -321,16 +342,16 @@ class RISC_V_Simulator:
                 elif 18 <= r <= 27:
                     name = f"s{r-16}"
                 else:
-                    name = f"t{r-26}"
+                    name = f"t{r-25}"
                 val = self.regs[r]
                 regs_line += f"x{r:2d}({name:>4}) = 0x{val:08X}  "
             print(regs_line)
 
-        # Print memory used
+        # Print only the data region; instruction words are not data.
         print()
         print("Data Memory (non-zero words):")
         found = False
-        for addr in range(0, len(self.memory), 4):
+        for addr in range(DATA_BASE, len(self.memory), 4):
             val = self.read_word(addr)
             if val != 0:
                 print(f"  0x{addr:04X}: 0x{val:08X}")
@@ -382,7 +403,11 @@ def assemble_instruction(mnemonic, *args):
     }
 
     def reg(name):
-        return regs.get(name, name if isinstance(name, int) else 0)
+        if isinstance(name, int):
+            return name
+        if name not in regs:
+            raise ValueError(f"Unknown register name: {name!r}")
+        return regs[name]
 
     mn = mnemonic.lower()
 
@@ -469,6 +494,9 @@ def assemble_instruction(mnemonic, *args):
         encoded = (0x6F) | (reg(rd) << 7) | (imm_19_12 << 12) | (imm_11 << 20) | (imm_10_1 << 21) | (imm_20 << 31)
         return encoded & 0xFFFFFFFF
 
+    elif mn == "ebreak":
+        return 0x00100073
+
     else:
         raise ValueError(f"Unknown mnemonic: {mnemonic}")
 
@@ -497,14 +525,12 @@ def build_program():
         addi  x11, x14, 0     # b = temp
         bne   x13, x12, loop  # if i != n, goto loop
 
-        # Store result to memory for verification
-        sw    x10, 0(x0)      # Mem[0] = result
-        lw    x15, 0(x0)      # verify by reading it back
+        # Store result to memory for verification (data region, not address 0)
+        sw    x10, 256(x0)    # Mem[0x100] = result
+        lw    x15, 256(x0)    # verify by reading it back
 
-        # Infinite loop to end
-        beq   x0, x0, end
-    end:
-        beq   x0, x0, end
+        # Halt the simulator
+        ebreak
     """
     program = []
     
@@ -523,14 +549,12 @@ def build_program():
         ("addi", "x10", "x11", "0"),    # 24: a = b
         ("addi", "x11", "x14", "0"),    # 28: b = temp
         ("bne", "x13", "x12", "-16"),    # 32: if i != n, goto loop (offset = -16 bytes = 4 insts back)
-        ("sw", "x10", "0(x0)"),         # 36: Mem[0] = result
-        ("lw", "x15", "0(x0)"),         # 40: x15 = Mem[0]
-        # end at PC=44:
-        ("beq", "x0", "x0", "0"),        # 44: end: beq x0, x0, 0 (loop to self)
+        ("sw", "x10", "256(x0)"),       # 36: Mem[0x100] = result
+        ("lw", "x15", "256(x0)"),       # 40: x15 = Mem[0x100]
+        ("ebreak",),                    # 44: halt the simulator
     ]
 
     # Compute BNE offset: from PC=32, target is PC=16, so offset = 16 - 32 = -16
-    # BEQ offset: from PC=44, target is PC=44, so offset = 0
     # RISC-V branch offset is in bytes (PC-relative), must be divisible by 2
 
     for mnemonic, *args in prog:

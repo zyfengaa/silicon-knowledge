@@ -11,6 +11,7 @@
  */
 
 #include <stdio.h>
+#include <math.h>
 #include <cuda_runtime.h>
 
 #define CUDA_CHECK(call) do {                                      \
@@ -59,7 +60,6 @@ int main() {
     const size_t BYTES_TOTAL = N * sizeof(float);
     const size_t BYTES_CHUNK = CHUNK * sizeof(float);
     const int BLOCK_SIZE = 256;
-    const int GRID_CHUNK  = (CHUNK + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
@@ -73,7 +73,7 @@ int main() {
     printf("Streams:       %d\n", NUM_STREAMS);
     printf("Chunk size:    %d elements (%.2f MB)\n", CHUNK,
            (double)BYTES_CHUNK / (1024 * 1024));
-    printf("Grid/stream:   %d blocks\n", GRID_CHUNK);
+    printf("Grid/stream:   %d blocks\n", (CHUNK + BLOCK_SIZE - 1) / BLOCK_SIZE);
     printf("--------------------------------------------\n");
 
     // -----------------------------------------------------------------------
@@ -133,6 +133,7 @@ int main() {
             int grid = (chunk + BLOCK_SIZE - 1) / BLOCK_SIZE;
             vec_add_kernel<<<grid, BLOCK_SIZE>>>(d_a + offset, d_b + offset,
                                                   d_c + offset, chunk);
+            CUDA_CHECK(cudaGetLastError());
 
             // 同步 D2H
             CUDA_CHECK(cudaMemcpy(h_c + offset, d_c + offset, chunk_bytes,
@@ -146,7 +147,7 @@ int main() {
         bool ok = true;
         for (int i = 0; i < 10; i++) {
             float expected = h_a[i] + h_b[i];
-            if (abs(h_c[i] - expected) > 1e-4) { ok = false; break; }
+            if (fabsf(h_c[i] - expected) > 1e-4f) { ok = false; break; }
         }
         printf("  Verification:     %s\n", ok ? "PASSED" : "FAILED");
     }
@@ -174,6 +175,7 @@ int main() {
             int grid = (chunk + BLOCK_SIZE - 1) / BLOCK_SIZE;
             vec_add_kernel<<<grid, BLOCK_SIZE, 0, streams[i]>>>(d_a + offset,
                 d_b + offset, d_c + offset, chunk);
+            CUDA_CHECK(cudaGetLastError());
 
             // D2H — async on stream
             CUDA_CHECK(cudaMemcpyAsync(h_c + offset, d_c + offset, chunk_bytes,
@@ -192,7 +194,7 @@ int main() {
         bool ok = true;
         for (int i = 0; i < 10; i++) {
             float expected = h_a[i] + h_b[i];
-            if (abs(h_c[i] - expected) > 1e-4) { ok = false; break; }
+            if (fabsf(h_c[i] - expected) > 1e-4f) { ok = false; break; }
         }
         printf("  Verification:     %s\n", ok ? "PASSED" : "FAILED");
     }
@@ -221,6 +223,7 @@ int main() {
                 int grid = (chunk + BLOCK_SIZE - 1) / BLOCK_SIZE;
                 vec_add_kernel<<<grid, BLOCK_SIZE>>>(d_a + offset, d_b + offset,
                                                       d_c + offset, chunk);
+                CUDA_CHECK(cudaGetLastError());
                 CUDA_CHECK(cudaMemcpy(h_c + offset, d_c + offset, chunk_bytes,
                                       cudaMemcpyDeviceToHost));
             }
@@ -242,6 +245,7 @@ int main() {
                 int grid = (chunk + BLOCK_SIZE - 1) / BLOCK_SIZE;
                 vec_add_kernel<<<grid, BLOCK_SIZE, 0, streams[i]>>>(d_a + offset,
                     d_b + offset, d_c + offset, chunk);
+                CUDA_CHECK(cudaGetLastError());
                 CUDA_CHECK(cudaMemcpyAsync(h_c + offset, d_c + offset, chunk_bytes,
                                            cudaMemcpyDeviceToHost, streams[i]));
             }

@@ -32,38 +32,41 @@ CDNA 专注于：
 
 - 基于 **Aldebaran** GPU（双 die 封装）
 - **Matrix Core 改进**：增加结构化稀疏支持
-- FP16/BF16 矩阵运算：383 TFLOPS
+- FP16/BF16 矩阵运算：MI250X 约 383 TFLOPS（密集）
 - HBM2e：3.27 TB/s
 - **Infinity Fabric 3.0**：片间互联
 - OAM（OCP Accelerator Module）封装
-- 双 die 设计，每 die 112 CU（220 CU 总计）
+- 双 die 设计：每 die 104 CU（MI250 共 208 CU）；MI250X 每 die 110 CU，共 220 CU
 
 ### CDNA 3 (MI300X, 2023)
 
 - **小芯片设计（Chiplet）**：
-  - 4 个 GCD（Graphics Compute Die，5nm），每个 GCD 包含 40 CU
+  - 8 个 XCD（Accelerator Complex Die，5nm/6nm），每个 XCD 包含 38 个 CU
   - 8 个 HBM3 堆栈
   - 通过 Infinity Fabric 互联
-- **Matrix Core**：第 3 代，FP8、TF32、Block FP6 支持
-- FP32：~163 TFLOPS
-- FP16/BF16：~327 TFLOPS（稀疏模式 653 TFLOPS）
+- **Matrix Core**：第 3 代，支持 FP8、FP16、BF16、FP32、FP64、INT8
+  （CDNA 3 不提供 FP6；Block FP6 是其他厂商/后续架构的概念）
+- FP32（向量）：约 163.4 TFLOPS
+- FP64（向量）：约 81.7 TFLOPS（FP64 Matrix Core 可达 163.4 TFLOPS）
+- FP16/BF16：约 1,307.4 TFLOPS（密集），稀疏模式 2,614.9 TFLOPS
+- FP8：约 2,614.9 TFLOPS（密集）
 - HBM3：5.3 TB/s
 - 总显存：192 GB HBM3
 
 ```
 MI300X 架构示意：
-┌─────────────────────────────────┐
-│ ┌──────┐  ┌──────┐             │
-│ │ GCD0 │  │ GCD1 │  HBM3 x8    │
-│ │ 40CU │  │ 40CU │  ………         │
-│ └──┬───┘  └──┬───┘             │
-│    │Infinity │                 │
-│ ┌──▼───┐  ┌──▼───┐             │
-│ │ GCD2 │  │ GCD3 │             │
-│ │ 40CU │  │ 40CU │             │
-│ └──────┘  └──────┘             │
-└─────────────────────────────────┘
-总 CU: 160（计算单元）
+┌──────────────────────────────────────────┐
+│ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐      │
+│ │ XCD0 │ │ XCD1 │ │ XCD2 │ │ XCD3 │ HBM3 │
+│ │ 38CU │ │ 38CU │ │ 38CU │ │ 38CU │ x8   │
+│ └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘      │
+│    │   Infinity Fabric 互联   │           │
+│ ┌──▼───┐ ┌──▼───┐ ┌──▼───┐ ┌──▼───┐      │
+│ │ XCD4 │ │ XCD5 │ │ XCD6 │ │ XCD7 │      │
+│ │ 38CU │ │ 38CU │ │ 38CU │ │ 38CU │      │
+│ └──────┘ └──────┘ └──────┘ └──────┘      │
+└──────────────────────────────────────────┘
+总 CU: 8 × 38 = 304（计算单元）
 ```
 
 ### AMD ROCm 软件栈
@@ -126,15 +129,17 @@ Intel 的 Tensor Core 实现：
 Intel 的小芯片设计超级计算 GPU：
 
 - **复杂的小芯片堆叠**：47 个芯片（tile）组成一个封装
-  - 16 个 Xe-HPC 核心（计算）
+  - 16 个 Xe-HPC 计算 tile
   - 8 个 Rambo 缓存芯片
-  - 16 个 HBM2e 堆栈 + 2 个 Xe Link I/O 芯片
-- 总计：128 EU（Execution Units）
-- XMX 单元：2048
-- FP32：~23 TFLOPS
-- FP16/BF16：~90 TFLOPS
+  - 8 个 HBM2e 堆叠 + 2 个 Xe Link I/O 芯片
+- 总计：128 个 Xe core（每个 Xe core 含 8 个 XMX 与 8 个 XVE 向量引擎）
+- XMX 单元：1024
+- XVE 向量引擎：1024
+- FP32：约 52.4 TFLOPS
+- FP16/BF16：约 832 TFLOPS（密集）
+- FP8/INT8：约 1664 TFLOPS/TOPS（密集）
 - HBM2e：2.45 TB/s
-- **XE Link**：Intel 版 NVLink，提供 GPU-GPU 互联
+- **Xe Link**：Intel 版 NVLink，提供 GPU-GPU 互联
 
 ### Intel Max 系列 (2023)
 
@@ -144,11 +149,15 @@ Intel 的 Max 系列 GPU（原 Ponte Vecchio）是 Aurora 超级计算机的核�
 |------|---------|
 | Xe Core 数量 | 128 |
 | XMX 单元 | 1024 |
-| FP32 TFLOPS | ~16.7 |
-| BF16 TFLOPS（密集）| ~67 |
+| XVE 向量引擎 | 1024 |
+| FP32 TFLOPS | 52.4 |
+| FP16/BF16 TFLOPS（密集）| 832 |
+| FP8/INT8 TOPS（密集）| 1664 |
 | 显存 | 128 GB HBM2e |
 | 显存带宽 | ~3.3 TB/s |
 | 封装功耗 | 600 W |
+
+> 注：MAX 1550 与 Ponte Vecchio 基于同一 Xe-HPC 架构，但具体封装/显存配置不同。
 
 ### Intel oneAPI 软件栈
 
@@ -175,10 +184,10 @@ oneAPI 通过 Data Parallel C++ (DPC++) 提供跨厂商的统一编程接口，�
 |------|------------|-----------|---------------|
 | **架构** | Hopper | CDNA 3 | Xe HPC |
 | **工艺** | TSMC 4N | TSMC 5nm + 6nm | Intel 7 + TSMC 5nm |
-| **封装** | 单 die（814 mm²） | 4 GCD + 8 HBM 小芯片 | 47 小芯片堆叠 |
-| **FP32** | 67 TFLOPS | 163 TFLOPS | 16.7 TFLOPS |
-| **FP16/BF16** | 989 TFLOPS | 1,308 TFLOPS（稀疏） | 67 TFLOPS |
-| **INT8** | 1,979 TOPS | 2,615 TOPS（稀疏） | 134 TOPS |
+| **封装** | 单 die（814 mm²） | 8 XCD + 8 HBM 小芯片 | 47 小芯片堆叠 |
+| **FP32** | 67 TFLOPS | 163.4 TFLOPS | 52.4 TFLOPS |
+| **FP16/BF16** | 989 TFLOPS | 1,307.4 TFLOPS（密集） | 832 TFLOPS |
+| **INT8** | 1,979 TOPS | 2,614.9 TOPS（密集） | 1,664 TOPS |
 | **专有矩阵单元** | 第 4 代 Tensor Core | 第 3 代 Matrix Core | XMX |
 | **显存容量** | 80 GB HBM3 | 192 GB HBM3 | 128 GB HBM2e |
 | **显存带宽** | 3.35 TB/s | 5.3 TB/s | 3.3 TB/s |
@@ -189,6 +198,8 @@ oneAPI 通过 Data Parallel C++ (DPC++) 提供跨厂商的统一编程接口，�
 | **编程模型** | CUDA | HIP/ROCm | oneAPI/DPC++ |
 | **AI 生态** | TensorRT, cuDNN | MIOpen, MIGraphX | oneDNN, OpenVINO |
 | **典型应用** | 训练 + 推理 | 训练 + 推理 | HPC + 推理 |
+
+> 注：MI300X 的 FP16/BF16 与 INT8 数字为密集（dense）吞吐，结构化稀疏模式下可再翻倍。H100 的 Tensor Core 数字同样为密集吞吐。
 
 ---
 
@@ -221,7 +232,7 @@ oneAPI 通过 Data Parallel C++ (DPC++) 提供跨厂商的统一编程接口，�
 |------|------|
 | **精度降低但保留精度** | FP64 → FP32 → FP16 → FP8 → FP4/FP6 |
 | **小芯片化** | 单 die 面积受限，chiplet 多 die 集成 |
-| **显存膨胀** | 80GB → 192GB → 288GB（H200/MI325X） |
+| **显存膨胀** | 80GB（H100）→ 141GB（H200）→ 192GB（MI300X）→ 288GB（MI325X） |
 | **复杂度上升** | 从 ~3B（Fermi）到 ~208B（Blackwell）晶体管 |
 | **开放生态竞争** | CUDA vs ROCm vs oneAPI |
 | **稀疏计算** | 2:4 结构化稀疏成为标准配置 |
@@ -230,14 +241,11 @@ oneAPI 通过 Data Parallel C++ (DPC++) 提供跨厂商的统一编程接口，�
 
 ## 参考文献
 
-- AMD, *CDNA 3 Architecture Whitepaper*, 2023. Sections: Matrix Core, Infinity Architecture, Chiplet Design.
-- AMD, *Instinct MI300X Accelerator Datasheet*, 2023.
+- AMD, *AMD Instinct MI300X Datasheet*, 2023.
+- AMD, *AMD Instinct MI300 Series Accelerators*, Hot Chips 35, 2023.
 - AMD, *ROCm Documentation*, Section: HIP Programming Guide.
-- Intel, *Xe HPC (Ponte Vecchio) Architecture Overview*, 2022.
-- Intel, *Intel Max Series GPU Datasheet*, 2023.
-- Intel, *oneAPI Programming Guide*, Section: Data Parallel C++.
-- AMD, *RDNA 3 / CDNA 3 Architecture Release*, 2023. Available at: amd.com
+- Intel, *Intel Data Center GPU Max Series Product Brief*, 2023.
+- Intel, *Intel oneAPI Programming Guide*, Section: Data Parallel C++.
 - NVIDIA, *H100 GPU Architecture Whitepaper*, 2022. （作为对比基准）
-- Jiang, Z. et al., "Analyzing the Performance of AMD CDNA 2 Architecture for HPC and AI Workloads", *IEEE HPEC*, 2022.
 - Intel, "Ponte Vecchio: A Many-Core Processor for HPC and AI", *Hot Chips 33*, 2021.
 - AMD, "AMD Instinct MI300 Series Accelerators", *Hot Chips 35*, 2023.

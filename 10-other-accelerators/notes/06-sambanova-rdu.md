@@ -26,9 +26,9 @@ SambaNova 的答案: 编译器快速重配置硬件数据通路
          ↓
        每个周期从指令存储器读取指令
 
-RDU:   数据 → PCE0 → PCE1 → PCE2 → PCE3 → 输出
+RDU:   数据 → PCU0 → PCU1 → PCU2 → PCU3 → 输出
          ↓
-       编译器配置每个 PCE 的功能和连接
+       编译器配置每个 PCU 的功能和连接
        数据在配置好的通路中流动，不需要指令
 ```
 
@@ -38,15 +38,17 @@ RDU:   数据 → PCE0 → PCE1 → PCE2 → PCE3 → 输出
 
 ### 2.1 硬件组成
 
-RDU 的核心是大量可编程计算引擎（Pattern Compute Engines，PCE）：
+RDU 的核心是大量可编程计算单元（Pattern Compute Unit，PCU）和模式存储单元（Pattern Memory Unit，PMU）：
 
 ```
 RDU 芯片:
-├── 多个 PCE 集群
-│   ├── PCE (Pattern Compute Engine)
+├── 多个 PCU 集群
+│   ├── PCU (Pattern Compute Unit)
 │   │   ├── 可重构 ALU 阵列
 │   │   ├── 本地存储
 │   │   └── 数据流控制逻辑
+│   ├── PMU (Pattern Memory Unit)
+│   │   └── 分布式 SRAM / 数据暂存
 │   └── ...
 ├── 数据存储
 │   ├── 分布式 SRAM
@@ -61,7 +63,7 @@ RDU 芯片:
 
 | 特性 | RDU | FPGA |
 |------|-----|------|
-| 可重构粒度 | 粗粒度（PCE 级） | 细粒度（LUT 级） |
+| 可重构粒度 | 粗粒度（PCU 级） | 细粒度（LUT 级） |
 | 重构速度 | 毫秒级 | 秒到分钟级 |
 | 编程方式 | 编译器（类 Python/ML 框架） | HDL / HLS |
 | 最小编程单元 | 数据流模式 | 逻辑门 |
@@ -71,17 +73,23 @@ RDU 在 FPGA 的灵活性和 GPU 的易用性之间取得了平衡。
 
 ---
 
-## 3. SN10 RDU (第二代)
+## 3. SN10 RDU（第一代，2020）
 
 | 规格 | SN10 RDU |
 |------|----------|
 | 制造工艺 | TSMC 7nm |
-| PCE 数量 | 中等规模（确切数字未公开） |
-| 片上存储 | 大容量分布式 SRAM |
-| 峰值性能 | > 1 PetaOps (稀疏 INT8) |
-| 外部存储 | HBM2 / HBM2E |
+| 计算/存储单元 | 640 个 PCU + 640 个 PMU |
+| 片上存储 | 320 MB 分布式 SRAM |
+| 峰值性能 | ~320 TFLOPS (BF16) |
+| 外部存储 | DDR4（6 通道；系统容量随配置） |
 | 互联 | 片间高速链接 |
 | 软件栈 | SambaFlow |
+
+> 说明：SN10 是 SambaNova 的第一代 RDU（2020 年发布），不是“第二代”。后续还有 SN20（2021）、SN30（2022）和 SN40L（2023/2024）。
+
+### 3.1 SN40L（2023/2024）
+
+SN40L 采用 TSMC 5nm，片上存储为 520 MB SRAM，并增加 64 GB HBM 和 1.5 TB DDR 外部存储，面向大模型推理和训练。具体系统配置和性能数字以 SambaNova 官方文档为准。
 
 ---
 
@@ -94,7 +102,7 @@ PyTorch 模型 → SambaFlow 编译器
                   ↓
 1. 计算图分析
 2. 数据流模式提取
-3. 资源分配（PCE 映射）
+3. 资源分配（PCU 映射）
 4. 数据通路配置
 5. 存储规划
                   ↓
@@ -117,7 +125,7 @@ x = torch.nn.Linear(4096, 4096)(x)
 
 # RDU 执行 (编译器自动实现):
 # MatMul → AddBias → GELU → MatMul → AddBias
-# 在 PCE 流水线中连续完成，不需要回写 DRAM
+# 在 PCU 流水线中连续完成，不需要回写 DRAM
 ```
 
 这种**算子融合**在 GPU 上需要手动编写融合 kernel，而 RDU 编译器自动完成。
@@ -138,8 +146,8 @@ GPU:
 
 RDU:
 模型层 1, 2, 3 → 编译器创建连续数据流
-                  PCE A → PCE B → PCE C
-                  数据在 PCE 间直接流动，不经过外部存储
+                  PCU A → PCU B → PCU C
+                  数据在 PCU 间直接流动，不经过外部存储
 ```
 
 ### 5.2 稀疏性处理
@@ -172,7 +180,7 @@ RDU 的编译器可以进行全局优化：
 
 - **大语言模型推理**：长序列、大 batch 的数据流模式
 - **稀疏 ML 模型**：需要处理不规则的激活模式
-- **多模型推理管線**：编译器可以跨模型做全局优化
+- **多模型推理管线**：编译器可以跨模型做全局优化
 - **需要灵活性的场景**：模型更新频率高，需要快速硬件适配
 
 ### 挑战
@@ -188,6 +196,6 @@ RDU 的编译器可以进行全局优化：
 
 1. SambaNova Systems. (2021). "SambaNova Reconfigurable Dataflow Unit." *Whitepaper*.
 2. SambaNova Systems. (2022). "Software-Defined Hardware for AI." *Hot Chips 34*.
-3. Prabhakar, R., et al. (2020). "SambaNova SN10 RDU: A Reconfigurable Dataflow Architecture for AI." *IEEE Micro*, 41(5).
+3. Prabhakar, R., et al. (2021). "SambaNova SN10 RDU: A Reconfigurable Dataflow Architecture for AI." *IEEE Micro*, 41(5).
 4. Olukotun, K. (2022). "Dataflow Architectures for Machine Learning." *ISCA 2022 Keynote*.
 5. SambaNova Systems. (2022). "SambaFlow: A Compiler-Driven Software Stack for the RDU." *Technical Report*.

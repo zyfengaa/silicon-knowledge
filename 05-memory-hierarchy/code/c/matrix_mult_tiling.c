@@ -11,7 +11,7 @@
  *   GFLOPS = (2 * N^3) / elapsed_seconds / 1e9
  *
  * Compile:
- *   gcc -O2 -o matmul_tiling matrix_mult_tiling.c -lm
+ *   gcc -O2 -std=gnu11 -o matmul_tiling matrix_mult_tiling.c -lm
  *
  * Run:
  *   ./matmul_tiling
@@ -81,8 +81,8 @@ matmul_naive(const double *A, const double *B, double *C)
 static void
 matmul_tiled(const double *A, const double *B, double *C, int tile_size)
 {
-    memset(C, 0, (size_t)N * N * sizeof(double));
-
+    /* C must already be zeroed by the caller, so that the timed region is
+     * identical for the naive and tiled versions. */
     for (int i = 0; i < N; i += tile_size) {
         int i_max = (i + tile_size < N) ? i + tile_size : N;
         for (int j = 0; j < N; j += tile_size) {
@@ -90,13 +90,16 @@ matmul_tiled(const double *A, const double *B, double *C, int tile_size)
             for (int k = 0; k < N; k += tile_size) {
                 int k_max = (k + tile_size < N) ? k + tile_size : N;
 
+                /* ikj order inside the block: B's rows and C's rows are
+                 * traversed contiguously, which is what makes blocking
+                 * pay off.  (ijk order keeps the cache-hostile access to
+                 * B[k][j] and largely defeats the tiling.) */
                 for (int ii = i; ii < i_max; ii++) {
-                    for (int jj = j; jj < j_max; jj++) {
-                        double sum = 0.0;
-                        for (int kk = k; kk < k_max; kk++) {
-                            sum += A[ii * N + kk] * B[kk * N + jj];
+                    for (int kk = k; kk < k_max; kk++) {
+                        double a = A[ii * N + kk];
+                        for (int jj = j; jj < j_max; jj++) {
+                            C[ii * N + jj] += a * B[kk * N + jj];
                         }
-                        C[ii * N + jj] += sum;
                     }
                 }
             }
@@ -147,6 +150,7 @@ main(void)
     printf("=== Matrix Multiply (N=%d) ===\n\n", N);
 
     /* ---- Naive ---- */
+    memset(Cref, 0, (size_t)N * N * sizeof(double));
     clock_gettime(CLOCK_MONOTONIC, &t1);
     matmul_naive(A, B, Cref);
     clock_gettime(CLOCK_MONOTONIC, &t2);
@@ -157,9 +161,15 @@ main(void)
     /* ---- Tiled ---- */
     int tile_sizes[] = {16, 32, 64};
     int num_tiles    = sizeof(tile_sizes) / sizeof(tile_sizes[0]);
+    double naive_sec = sec;
+    int    any_faster = 0;
 
     for (int t = 0; t < num_tiles; t++) {
         int tile = tile_sizes[t];
+
+        /* Zero C outside the timed region: the naive and tiled timings
+         * then cover exactly the same work (the multiply itself). */
+        memset(C, 0, (size_t)N * N * sizeof(double));
 
         clock_gettime(CLOCK_MONOTONIC, &t1);
         matmul_tiled(A, B, C, tile);
@@ -169,13 +179,23 @@ main(void)
         gflops = total_ops / sec / 1.0e9;
 
         int ok = check_correct(Cref, C);
+        if (sec < naive_sec) any_faster = 1;
 
         printf("Tiled (tile=%2d): %8.3f s   %8.2f GFLOPS   [%s]\n",
                tile, sec, gflops, ok ? "OK" : "MISMATCH");
     }
 
-    printf("\nTiling improves cache utilisation by reusing data in\n");
-    printf("small blocks that fit into L1/L2 cache, reducing misses.\n");
+    printf("\nNote: blocking reuses data in small blocks that fit into\n");
+    printf("L1/L2 cache, but the benefit depends on tile size, compiler,\n");
+    printf("and machine.  Compare the measured times above rather than\n");
+    printf("assuming a fixed speedup.\n");
+    if (any_faster) {
+        printf("On this run, at least one tile size was faster than the\n");
+        printf("naive ijk loop.\n");
+    } else {
+        printf("On this run, none of the tested tile sizes was faster than\n");
+        printf("the naive ijk loop.\n");
+    }
 
     free(A);
     free(B);

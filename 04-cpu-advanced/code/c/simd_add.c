@@ -5,10 +5,15 @@
  * SSE (128-bit SIMD) vector addition on x86 processors.
  *
  * Compile (SSE version):
- *   gcc -O2 -msse -o simd_add simd_add.c
+ *   gcc -O2 -msse -fno-tree-vectorize -o simd_add simd_add.c
  *
- * Compile (with auto-vectorization hint):
- *   gcc -O2 -msse -fopt-info-vec -o simd_add simd_add.c
+ * Compile (inspect auto-vectorization of the scalar loop):
+ *   gcc -O2 -msse -fopt-info-vec-optimized -o simd_add simd_add.c
+ *   (without -fno-tree-vectorize, the "scalar" loop may itself be
+ *    vectorized, so its timing is no longer a fair scalar baseline)
+ *
+ * Note: -fno-tree-vectorize is used so the "scalar" baseline really stays
+ * scalar; GCC 12+ auto-vectorizes this loop at -O2 by default.
  *
  * Run:
  *   ./simd_add
@@ -16,12 +21,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 #include <xmmintrin.h>  /* SSE intrinsics (_mm_*) */
 
 #ifndef N
-#define N  (1024 * 1024 * 64)   /* 64 million floats ~ 256 MB per array */
+/* 1M floats = 4 MB per array, 12 MB total.  Keeping the working set near
+ * cache/memory bandwidth limits makes the comparison less dominated by
+ * pure DRAM streaming.  Override with -DN=... for other sizes. */
+#define N  (1024 * 1024)
 #endif
 
 /* ------------------------------------------------------------------ */
@@ -51,10 +58,10 @@ add_sse(const float *restrict a,
 
     /* Process 4 floats per iteration (128-bit SSE). */
     for (i = 0; i <= n - 4; i += 4) {
-        __m128 va = _mm_loadu_ps(&a[i]);   /* unaligned load of 4 floats */
-        __m128 vb = _mm_loadu_ps(&b[i]);
+        __m128 va = _mm_load_ps(&a[i]);    /* aligned load of 4 floats */
+        __m128 vb = _mm_load_ps(&b[i]);
         __m128 vc = _mm_add_ps(va, vb);    /* packed single-precision add */
-        _mm_storeu_ps(&c[i], vc);          /* unaligned store */
+        _mm_store_ps(&c[i], vc);           /* aligned store */
     }
 
     /* Tail: remaining elements (0 .. 3) handled with scalar code. */
@@ -80,9 +87,11 @@ static float *
 alloc_fill(int n, float base)
 {
     float *p = NULL;
+    int rc;
     /* Align to 16-byte boundary for SSE. */
-    if (posix_memalign((void **)&p, 16, (size_t)n * sizeof(float)) != 0) {
-        perror("posix_memalign");
+    rc = posix_memalign((void **)&p, 16, (size_t)n * sizeof(float));
+    if (rc != 0) {
+        fprintf(stderr, "posix_memalign failed (error %d)\n", rc);
         exit(EXIT_FAILURE);
     }
     for (int i = 0; i < n; i++) {
@@ -147,7 +156,9 @@ main(void)
  *   - Intel Intrinsics Guide,
  *     https://www.intel.com/content/www/us/en/docs/intrinsics-guide/
  *   - Hennessy, J. L. & Patterson, D. A. "Computer Architecture:
- *     A Quantitative Approach", 6th Edition, Chapter 3 (SIMD).
+ *     A Quantitative Approach", 6th Edition, Chapter 4 (Data-Level
+ *     Parallelism in Vector, SIMD, and GPU Architectures).
  *   - Patterson, D. A. & Hennessy, J. L. "Computer Organization and
- *     Design RISC-V Edition", Chapter 3.
+ *     Design RISC-V Edition", Chapter 6 (Parallel Processors from
+ *     Client to Cloud).
  */

@@ -14,15 +14,16 @@
 | 04 | **Warp 执行** | Warp divergence / convergence、掩蔽执行 |
 | 05 | **GPU 内存层次** | Global / Shared / Local / Register / Constant / Texture 各层级特性 |
 | 06 | **内存优化** | 合并访问（Coalescing）、Bank Conflict |
-| 07 | **Tensor Core** | 4×4 矩阵乘加速单元、混合精度（FP16/BF16/INT8） |
+| 07 | **Tensor Core** | 矩阵乘加速单元、混合精度（FP16/BF16/TF32/FP8/FP4） |
 | 08 | **GPU 互联** | NVLink、NVSwitch、PCIe 拓扑 |
 | 09 | **架构演进** | NVIDIA Fermi → Kepler → Maxwell → Pascal → Volta → Turing → Ampere → Hopper → Blackwell |
 | 10 | **AMD / Intel GPU** | AMD CDNA 3、Intel Xe HPC 架构简介 |
+| 11 | **Hopper 与 Blackwell** | TMA、Thread Block Cluster、WGMMA、tcgen05/TMEM、FP4/FP6、GB200 NVL72 |
 
 ## 前置知识
 
-- [03 CPU 流水线](/03-cpu-pipeline/)（需要理解并行执行的基本概念）
-- [05 存储层次](/05-memory-hierarchy/)（缓存概念用于类比 GPU 内存）
+- [03 CPU 流水线](../03-cpu-pipeline/)（需要理解并行执行的基本概念）
+- [05 存储层次](../05-memory-hierarchy/)（缓存概念用于类比 GPU 内存）
 
 ## 建议学习方式
 
@@ -37,7 +38,7 @@
 | 文件 | 内容 |
 |------|------|
 | `cuda/vec_add.cu` | GPU 入门：向量加法，对比 CPU 和 GPU 执行时间 |
-| `cuda/matrix_mul.cu` | 矩阵乘优化：naive → tiled shared memory → Tensor Core |
+| `cuda/matrix_mul.cu` | 矩阵乘优化：naive → tiled shared memory |
 | `cuda/reduction.cu` | 规约操作优化：shared memory + warp-level reduction |
 | `cuda/coalescing.cu` | 合并访问 vs 非合并访问的带宽对比 |
 | `cuda/bank_conflict.cu` | Bank Conflict 的条件和影响演示 |
@@ -56,6 +57,7 @@
 
 - Kirk & Hwu, *Programming Massively Parallel Processors*, 第 1-5 章
 - NVIDIA, *CUDA C++ Programming Guide*
-- NVIDIA, *Turing T102 GPU Architecture Whitepaper*
+- NVIDIA, *Turing TU102 GPU Architecture Whitepaper*
 - NVIDIA, *Hopper H100 GPU Architecture Whitepaper*
+- NVIDIA, *NVIDIA Blackwell Architecture Technical Brief*
 - [AMD CDNA 3 Whitepaper](https://www.amd.com/en/products/accelerators/cdna-3.html)

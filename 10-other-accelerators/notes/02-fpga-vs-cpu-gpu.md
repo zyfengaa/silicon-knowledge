@@ -64,13 +64,13 @@ FPGA 优势来源:
 
 ### 3.1 峰值算力
 
-FPGA 的时钟频率（约 300 MHz）远低于 GPU（约 1.5-2 GHz）。对于可以同时启动大量线程的大规模并行计算，GPU 在峰值 FLOPS 上有数量级优势：
+FPGA 的时钟频率（约 300 MHz）远低于 GPU（约 1.5-2 GHz）。对于可以同时启动大量线程的大规模并行计算，GPU 在峰值 FLOPS 上有数量级优势。注意下表混用了不同精度：VU9P 的 4.2 是 INT8 TOPS，而 A100/H100 列的是 FP32 TFLOPS，不能直接比较：
 
-| 器件 | 时钟 | DSP/核心数 | TFLOPS (FP32) |
-|------|------|-----------|--------------|
-| Xilinx VU9P | ~300 MHz | 6840 DSP | ~4.2 (INT8) |
-| NVIDIA A100 | 1.4 GHz | 6912 CUDA | 19.5 |
-| NVIDIA H100 | 1.8 GHz | 18432 CUDA | 67 |
+| 器件 | 时钟 | DSP/核心数 | 峰值算力 |
+|------|------|-----------|----------|
+| Xilinx VU9P | ~300 MHz | 6840 DSP | ~4.2 TOPS (INT8)；FP32 约 2 TFLOPS |
+| NVIDIA A100 | 1.4 GHz | 6912 CUDA | 19.5 TFLOPS (FP32) |
+| NVIDIA H100 | 1.8 GHz | 16,896 CUDA | 67 TFLOPS (FP32) |
 
 ### 3.2 编程难度
 

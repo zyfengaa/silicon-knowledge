@@ -29,19 +29,19 @@ BF16 的引入使得 TPU v2 既可以获得 FP16 的数据存储效率（每个�
 
 **（1）矩阵乘法单元（MXU）**
 
-TPU v2 的 Systolic Array（在 Google 的术语中称为 MXU）尺寸从 v1 的 128×128 改为 128×128，但支持 BF16 输入和 FP32 累加：
+TPU v2 的 Systolic Array（在 Google 的术语中称为 MXU）尺寸从 v1 的 256×256 改为每核心 128×128，但支持 BF16 输入和 FP32 累加：
 
 $$
 \text{MXU 计算:}\quad C_{ij} += \sum_{k=0}^{127} A_{ik} \cdot B_{kj},\quad A_{ik}, B_{kj} \in \mathbb{B}_{16},\; C_{ij} \in \mathbb{F}_{32}
 $$
 
-每个 MXU 在每个周期执行 $128 \times 128 = 16,384$ 次 BF16 乘加运算，在 700 MHz 频率下提供约 $16,384 \times 700 = 11.5$ TFLOPS 的峰值性能。每个 TPU v2 芯片包含 **两个核心（core）**，每个核心包含一个 MXU，因此单芯片峰值性能约为 **23 TFLOPS**（BF16）。
+每个 MXU 在每个周期执行 $128 \times 128 = 16,384$ 次 BF16 乘加运算。按 2 FLOP/MAC 计算，在 700 MHz 频率下每个核心的峰值约为 $16,384 \times 700 \times 2 \approx 22.9$ TFLOPS。每个 TPU v2 芯片包含 **两个核心（core）**，每个核心包含一个 MXU，因此单芯片峰值性能约为 **45 TFLOPS**（BF16）。
 
-然而，实际训练时的有效性能约为 180 TFLOPS——这说明 TPU v2 的 BF16 运算采用了"脉动复用量化"（Systolic Quantization）技术：每个 MXU 在一个 728 MHz 周期内实际上执行了多个低精度运算，芯片厂商未公开具体倍率。
+需要注意口径：公开资料中常见的 **180 TFLOPS** 是 **v2-4 板卡（4 颗芯片）** 的合计峰值（4 × 45 TFLOPS），不是单芯片性能。单芯片 v2 的 BF16 峰值为 45 TFLOPS，不存在所谓“脉动复用量化（Systolic Quantization）”这类未公开的倍率技术。
 
 **（2）SRAM 容量翻倍**
 
-每个 TPU v2 核心配备 16MB 的软件管理片上 SRAM（v1 整个芯片为 28MB），两个核心合计 32MB。SRAM 的增加来自于训练需要存储更多中间激活值以支持反向传播的计算。
+每个 TPU v2 核心配备约 32 MiB 的软件管理片上 SRAM，两个核心合计约 **64 MiB**（v1 整个芯片为 28 MiB）。SRAM 的增加来自于训练需要存储更多中间激活值以支持反向传播的计算。
 
 **（3）HBM 高带宽内存**
 
@@ -57,7 +57,7 @@ TPU v2 采用 **HBM（High Bandwidth Memory）** 取代了 v1 的 DDR3，每个�
 
 ### 2.4 分布式训练与 All-Reduce
 
-TPU v2 首次引入了**跨芯片互联网络**以支持分布式训练。每个芯片通过专用的高速互联与相邻芯片连接，形成 **2D torus 拓扑**。在 TPU v2 中，64 个芯片组成一个"pod"（部署在四个 4×4 阵列的机架中），通过芯片间互联实现高效的 All-Reduce 通信。
+TPU v2 首次引入了**跨芯片互联网络**以支持分布式训练。每个芯片通过专用的高速互联与相邻芯片连接，形成 **2D torus 拓扑**。在 TPU v2 中，**256 个芯片**组成一个 pod（16×16 的 2D torus）；64 芯片是更小的子切片/板级规模，不应与 pod 混称。通过芯片间互联实现高效的 All-Reduce 通信。
 
 All-Reduce 操作对分布式训练至关重要。在数据并行训练中，每个芯片独立计算本地的梯度，然后需要将所有芯片的梯度求和后再更新每个芯片的权重副本。TPU v2 的 2D torus 拓扑使得 All-Reduce 可以在硬件层面高效完成：
 
@@ -69,7 +69,7 @@ $$
 
 ## 3. 冷却系统
 
-TPU v2 的 TDP 相对于 v1 大幅增加（单芯片约 200–250W），简单的自然散热或风冷已经无法满足。因此，TPU v2 的 pod 采用了**水冷**散热方案。每个机架配备冷却液分配单元，通过冷板直贴芯片的方式带走热量。对于 v2，仅部分高负载配置（64-chip pod）使用了水冷，而较小的部署仍可使用风冷。
+TPU v2 的 TDP 相对于 v1 大幅增加（单芯片约 280W），但 v2 仍采用**风冷**散热方案；Google 在 TPU v3 上才首次引入液冷。所谓“v2 的 pod 采用水冷、部分 64-chip 配置使用水冷”的说法不符合公开资料，应删除。
 
 ## 4. 性能对比
 
@@ -78,14 +78,14 @@ TPU v2 的 TDP 相对于 v1 大幅增加（单芯片约 200–250W），简单�
 | 配置 | 吞吐量 (images/sec) |
 |-----|-------------------|
 | 1 chip | ~220 |
-| 64-chip pod | ~11,500 |
+| 64-chip slice | ~11,500 |
 | 对比 GPU (单卡 K80) | ~70 |
 
 TPU v2 展示了在可训练专用加速器领域的技术可行性。它证明了定制 ASIC 不仅在推理中具有优势，在训练场景下同样能够获得比通用 GPU 更好的性能和效率。
 
 ## 参考文献
 
-1. Jouppi, N. P., et al. "A Domain-Specific Supercomputer for Training Deep Neural Networks." *Proceedings of the 45th Annual International Symposium on Computer Architecture (ISCA)*, 2018, pp. 1–14.
+1. Jouppi, N. P., et al. "A Domain-Specific Supercomputer for Training Deep Neural Networks." *Communications of the ACM*, vol. 63, no. 7, 2020, pp. 67–78.
 2. Wang, S., and Kanwar, P. "BFloat16: The Secret to High Performance on Cloud TPUs." *Google Cloud Blog*, 2019.
 3. Burgess, N., et al. "BFloat16 Processing for Neural Networks." *IEEE Symposium on Computer Arithmetic (ARITH)*, 2019, pp. 88–95.
 4. Koster, U., et al. "Flexpoint: An Adaptive Numerical Format for Efficient Training of Deep Neural Networks." *Advances in Neural Information Processing Systems (NeurIPS)*, 2017, pp. 1742–1752.

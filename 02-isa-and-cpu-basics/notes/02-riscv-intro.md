@@ -9,9 +9,9 @@ RISC-V is an ideal ISA for learning computer architecture for several reasons:
 
 2. **Modular Design**: RISC-V is designed as a small base integer ISA plus optional extensions. This allows minimal implementations (e.g., for embedded systems) and rich implementations (e.g., for application processors) to share the same ISA.
 
-3. **Clean and Minimal**: RISC-V strips away decades of legacy baggage found in x86 and ARM. The base integer ISA (RV32I) contains only about 50 instructions that fit in six simple formats.
+3. **Clean and Minimal**: RISC-V strips away decades of legacy baggage found in x86 and ARM. The base integer ISA (RV32I) contains only 40 instructions that fit in six simple formats.
 
-4. **Academic Foundation**: Created at UC Berkeley by Krste Asanovic, Andrew Waterman, and David Patterson (co-author of the definitive computer architecture textbooks), RISC-V was designed for education from the start.
+4. **Academic Foundation**: Created at UC Berkeley by Krste Asanovic, Andrew Waterman, and David Patterson (co-author of the definitive computer architecture textbooks), RISC-V is a clean open ISA that has since been widely adopted in both research and education.
 
 5. **Industry Adoption**: RISC-V is no longer just academic. Companies like SiFive, Esperanto, and Microchip produce RISC-V silicon. Google, NVIDIA, and Qualcomm are investing heavily.
 
@@ -24,7 +24,7 @@ RISC-V follows a clean RISC philosophy:
 | Fixed instruction length   | 32-bit instructions (RV32I/RV64I); 16-bit compressed extension (RVC) |
 | Load/store architecture    | Only `lw`/`sw` (and variants) access memory                   |
 | Few addressing modes       | Register, immediate, base+offset                               |
-| Large register file        | 32 x registers (x0--x31), with x0 hardwired to zero           |
+| Large register file        | 32 registers (x0--x31), with x0 hardwired to zero             |
 | Simple instruction formats | Six uniform formats (R, I, S, B, U, J)                        |
 | No condition codes         | Branches compare registers directly (like MIPS, unlike ARM32) |
 
@@ -82,9 +82,9 @@ The combination **RV32IMAFDZicsr_Zifencei** is called **RV32G** (General-purpose
 
 | Aspect            | RV32I (RISC-V)    | ARMv8-A (AArch32) | x86-64 (IA-32e)    |
 |-------------------|-------------------|-------------------|--------------------|
-| Instruction count | ~50               | ~200+             | ~1000+             |
-| Fixed length      | Yes (32-bit)      | Yes (32-bit)      | No (1--15 bytes)   |
-| Registers         | 31 + x0=0         | 15 + PC           | 16 (8 GPR + stack) |
+| Instruction count | 40                | ~200+             | ~1000+             |
+| Fixed length      | Yes (32-bit)      | No (A32 is 32-bit; Thumb-2 mixes 16/32-bit) | No (1--15 bytes)   |
+| Registers         | 31 + x0=0         | 15 + PC           | 16 GPR (incl. RSP/RBP) |
 | Condition codes   | No                | Yes (NZCV)        | Yes (RFLAGS)       |
 | Addressing modes  | 3                 | ~9                | ~10+               |
 | License fee       | None (open)       | Yes               | Yes (cross-license)|
@@ -98,6 +98,8 @@ To experiment with RISC-V assembly:
 sudo apt install gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu
 
 # Compile a C program
+# Note: a riscv64-only toolchain usually has no rv32 multilib. If the command
+# below fails, install the multilib package or use riscv32-unknown-elf-gcc.
 riscv64-linux-gnu-gcc -march=rv32im -mabi=ilp32 -o prog prog.c
 
 # Disassemble to see instructions
@@ -116,5 +118,5 @@ Alternatively, the online [RISC-V Interpreter](https://www.cs.cornell.edu/course
 1. Waterman, A., & Asanovic, K. (Eds.). *The RISC-V Instruction Set Manual, Volume I: Unprivileged Architecture*. Document Version 20191213. Available at: https://riscv.org/technical/specifications/
 2. Waterman, A. "Design of the RISC-V Instruction Set Architecture." PhD Dissertation, UC Berkeley, 2016.
 3. Patterson, D. A., & Hennessy, J. L. *Computer Organization and Design: The Hardware/Software Interface*. RISC-V Edition. Morgan Kaufmann. Chapter 2.
-4. Asanovic, K., & Patterson, D. A. "Instruction Sets Should Be Free: The Case for RISC-V." *IEEE Micro*, 2014.
+4. Asanovic, K., & Patterson, D. A. "Instruction Sets Should Be Free: The Case for RISC-V." Technical Report No. UCB/EECS-2014-146, EECS Department, University of California, Berkeley, August 2014.
 5. SiFive Inc. *RISC-V Core IP Documentation*. https://www.sifive.com/risc-v-core-ip

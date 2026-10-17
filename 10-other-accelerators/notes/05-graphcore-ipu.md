@@ -29,6 +29,8 @@ Softmax:     core 201   → softmax 指令
 
 所有核心并行执行，互不阻塞。
 
+> 补充：Graphcore 于 2024 年 7 月被 SoftBank 收购，后续产品路线和软件支持以 Graphcore/SoftBank 的公开公告为准。
+
 ---
 
 ## 2. IPU 架构
@@ -40,12 +42,12 @@ Softmax:     core 201   → softmax 指令
 | 制造工艺 | TSMC 7nm |
 | 处理器核心数 | 1,472 |
 | 每核心线程槽 | 6 (可同时驻留 6 个线程) |
-| 每核心 SRAM | 916 KB |
+| 每核心 SRAM | ~624 KB |
 | 总片上 SRAM | 900 MB |
-| 峰值 FP16 TFLOPS | 250 (稀疏) / 125 (稠密) |
+| 峰值算力 | ~250 TFLOPS (FP16)；FP32 约 62.5 TFLOPS |
 | 互联带宽 | 8 TB/s (片内) |
-| 片间互联 | 320 Gbps / 芯片 (IPU-Link) |
-| TDP | ~185W |
+| 片间互联 | 320 GB/s 聚合（10 条 IPU-Link） |
+| TDP | ~300 W |
 
 ### 2.2 处理核心（Tile）
 
@@ -60,7 +62,7 @@ Softmax:     core 201   → softmax 指令
 │   │   ├── 整数运算
 │   │   └── 特殊函数（激活函数等）
 │   └── 写回
-├── 本地 SRAM (916 KB)
+├── 本地 SRAM (~624 KB)
 │   └── 存储指令和数据
 ├── 6 线程上下文
 │   └── 硬件多线程，由编译器调度
@@ -180,22 +182,22 @@ Layer1 (tile 0-49) → Layer2 (tile 50-99) → Layer3 (tile 100-149)
 
 - **模型推理**（特别是小批次）：每个 tile 独立处理，无需等待其他 tile
 - **稀疏模型**：各 tile 独立处理稀疏激活
-- **图神经网路（GNNs）**：GNN 的图结构天然适合 tile 上的分布式处理
+- **图神经网络（GNNs）**：GNN 的图结构天然适合 tile 上的分布式处理
 - **NLP 推理**：BSP 模型适合 Transformer 的 attention 计算
 
 ### 不适用场景
 
 - **大规模稠密矩阵乘**：GPU 的 Tensor Core 仍占优势
 - **动态控制流**：BSP 模型对动态图支持有限
-- **需要大量 DRAM 的模型**：IPU 全部使用 SRAM，总容量小于 HBM
+- **需要大量 DRAM 的模型**：IPU 片上 SRAM 约 900MB，另有外部 DDR4 Exchange Memory；总容量和带宽仍小于 HBM 系统
 
 ---
 
 ## 参考文献
 
 1. Graphcore. (2020). "Graphcore IPU Architecture: GC200." *Whitepaper*.
-2. Jia, Z., et al. (2019). "Graphcore IPU Architecture and Performance Analysis for Machine Learning." *Hot Chips 31*.
+2. Jia, Z., et al. (2019). "Dissecting the Graphcore IPU Architecture via Microbenchmarking." *arXiv:1912.03413*.
 3. Graphcore. (2021). "Poplar SDK Programming Guide." *Graphcore Documentation*.
 4. Valiant, L. G. (1990). "A Bridging Model for Parallel Computation." *Communications of the ACM*, 33(8).
 5. Graphcore. (2022). "Benchmarking the Graphcore IPU." *Technical Report*.
-6. Knowles, S. (2022). "Graphcore's Second-Generation IPU." *IEEE Micro*, 42(3).
+6. Graphcore. (2020). "Colossus MK2 GC200 IPU." *Hot Chips 32*.

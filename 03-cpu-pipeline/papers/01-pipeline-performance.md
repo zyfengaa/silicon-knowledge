@@ -7,8 +7,8 @@
 
 ## Also Referenced
 
-- **Textbook:** Hennessy, J. L., & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 6th Edition. Morgan Kaufmann, 2019. Chapter 3: Pipelining.
-- **Paper:** Kuck, D. J. "A Survey of Computer Architecture." *IEEE Transactions on Computers*, Vol. C-26 No. 12, 1977, pp. 1199--1210. (Early pipeline taxonomy)
+- **Textbook:** Hennessy, J. L., & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 6th Edition. Morgan Kaufmann, 2019. Appendix C: Pipelining: Basic and Intermediate Concepts (and Chapter 3 for ILP).
+- **Paper:** Patterson, D. A., & Sequin, C. H. "RISC I: A Reduced Instruction Set VLSI Computer." *Proceedings of the 8th Annual International Symposium on Computer Architecture (ISCA)*, 1981, pp. 443--457.
 - **Paper:** Smith, J. E. "A Study of Branch Prediction Strategies." *Proceedings of the 8th Annual International Symposium on Computer Architecture (ISCA)*, 1981, pp. 135--148.
 
 ## Contribution (One Sentence)
@@ -68,7 +68,7 @@ Data hazards occur when an instruction depends on the result of a previous instr
 |--------|---------|---------|
 | RAW (Read After Write) | Instruction reads a register before the previous one writes it | `add x1,x2,x3` / `sub x4,x1,x5` |
 | WAR (Write After Read) | Instruction writes a register before the previous one reads it | Impossible in in-order pipeline |
-| WAW (Write After Write) | Instruction writes a register before the previous one writes it | `add x1,...` / `sub x1,...` -- rare in 5-stage RISC |
+| WAW (Write After Write) | Instruction writes a register before the previous one writes it | `add x1,...` / `sub x1,...` -- not a hazard in a simple in-order 5-stage pipeline; it matters in out-of-order/superscalar designs |
 
 **RAW hazards** dominate in RISC pipelines. The key insight is that the result of an ALU instruction is available at the end of EX (not WB), and a dependent instruction needs it at the start of EX. Forwarding (bypassing) routes the value directly.
 
@@ -99,18 +99,17 @@ if (MEM/WB.RegWrite and MEM/WB.rd != 0 and MEM/WB.rd == ID/EX.rs1 and
 Forwarding cannot fully resolve **load-use hazards** because a load instruction's data is only available at the end of MEM, but the dependent instruction needs it at the beginning of EX. The result arrives one cycle too late.
 
 ```
-Cycle:      1       2       3       4       5
+Cycle:      1       2       3       4       5       6
 lw x1,0(x2): IF      ID      EX      MEM     WB
-                            (data ready here)
-add x3,x1,x4:         IF      ID      EX     ...
-                              (needs x1 here)
-                                  ^-- 1 cycle gap
+add x3,x1,x4:         IF      ID      ID      EX     MEM ...
+                              (stall)  (data ready at end of MEM)
+                                      ^-- 1-cycle bubble in EX
 ```
 
 The minimum stall for a load-use hazard is **1 cycle** (a "bubble" in the pipeline). The hardware inserts a stall by:
 1. Freezing the PC (preventing IF from fetching the next instruction)
-2. Inserting a bubble in the ID/EX pipeline register (setting control signals to 0)
-3. Allowing the load to complete MEM while keeping the dependent instruction in ID
+2. Freezing IF/ID so the dependent instruction stays in ID
+3. Inserting a bubble into ID/EX (setting control signals to 0) while the load advances to MEM
 
 ### Control Hazards and Branch Prediction
 
@@ -236,9 +235,8 @@ The CPI model is the signature contribution of Patterson and Hennessy's quantita
 ## References
 
 1. Patterson, D. A., & Hennessy, J. L. *Computer Organization and Design: The Hardware/Software Interface*. RISC-V Edition. Morgan Kaufmann, 2017. Chapter 4.
-2. Hennessy, J. L., & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 6th Edition. Morgan Kaufmann, 2019. Chapter 3.
-3. Kuck, D. J. "A Survey of Computer Architecture." *IEEE Transactions on Computers*, Vol. C-26 No. 12, 1977, pp. 1199--1210.
-4. Smith, J. E. "A Study of Branch Prediction Strategies." *Proceedings of the 8th Annual International Symposium on Computer Architecture (ISCA)*, 1981, pp. 135--148.
-5. Patterson, D. A. "RISC-I: A Reduced Instruction Set VLSI Computer." *Proceedings of the 8th Annual International Symposium on Computer Architecture (ISCA)*, 1981, pp. 443--457.
-6. Harris, S., & Harris, D. *Digital Design and Computer Architecture: RISC-V Edition*. Morgan Kaufmann, 2021. Chapters 6, 7.
-7. Waterman, A., & Asanovic, K. (Eds.). *The RISC-V Instruction Set Manual, Volume I: Unprivileged Architecture*. Document Version 20191213.
+2. Hennessy, J. L., & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 6th Edition. Morgan Kaufmann, 2019. Appendix C (Pipelining) and Chapter 3 (ILP).
+3. Smith, J. E. "A Study of Branch Prediction Strategies." *Proceedings of the 8th Annual International Symposium on Computer Architecture (ISCA)*, 1981, pp. 135--148.
+4. Patterson, D. A., & Sequin, C. H. "RISC I: A Reduced Instruction Set VLSI Computer." *Proceedings of the 8th Annual International Symposium on Computer Architecture (ISCA)*, 1981, pp. 443--457.
+5. Harris, S., & Harris, D. *Digital Design and Computer Architecture: RISC-V Edition*. Morgan Kaufmann, 2021. Chapters 6, 7.
+6. Waterman, A., & Asanovic, K. (Eds.). *The RISC-V Instruction Set Manual, Volume I: Unprivileged Architecture*. Document Version 20191213.

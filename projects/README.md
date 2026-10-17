@@ -57,7 +57,7 @@
 手写一个高度优化的 Softmax CUDA kernel。
 
 **要求**：
-- 实现安全的 online softmax 算法（两趟 reduction）
+- 实现安全的 softmax：在线（online）单趟流式算法，或传统两趟 reduction（先求 max，再求 exp 和）；注意 online softmax 本身不是两趟 reduction
 - 使用 shared memory 减少全局访存
 - 使用 warp-level primitive（`__shfl_xor_sync`）
 - 与 cuDNN 版本做性能对比
@@ -92,7 +92,7 @@
 **要求**：
 - 支持 BF16 输入、FP32 累加
 - 可配置阵列大小（128×128、64×64 等）
-- 从 HBM（Python dict 模拟）读取矩阵数据
+- 从 HBM（用 C++ `std::unordered_map`、数组或文件模拟）读取矩阵数据
 - 实现指令队列驱动执行
 
 **扩展**：增加 SparseCore 风格的稀疏支持。

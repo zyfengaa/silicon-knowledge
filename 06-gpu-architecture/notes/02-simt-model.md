@@ -35,7 +35,7 @@ SIMD 的局限：
 
 ### SIMT（Single Instruction, Multiple Threads）
 
-SIMT 是 NVIDIA 在 G80 架构中引入的执行模型。一条指令被多个独立线程同时执行，每个线程有自己的程序计数器（PC）和寄存器上下文。
+SIMT 是 NVIDIA 在 G80 架构中引入的执行模型。一条指令被多个独立线程同时执行。Volta 之前，同一 warp 的线程共享一个程序计数器（PC），以锁步方式执行；Volta 引入独立线程调度（ITS）后，硬件为每个线程维护独立的 PC 和执行状态，允许 warp 内线程在分支处更自由地发散与重新汇合。
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -48,7 +48,7 @@ SIMT 是 NVIDIA 在 G80 架构中引入的执行模型。一条指令被多个�
            ▼
 ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐
 │ T0  │ T1  │ T2  │ T3  │ ... │ T28 │ T29 │ T30 │ T31 │  ← 32 线程
-│ PC  │ PC  │ PC  │ PC  │     │ PC  │ PC  │ PC  │     ← 每个线程独立 PC
+│ PC  │ PC  │ PC  │ PC  │     │ PC  │ PC  │ PC  │     ← Volta+ 每线程独立 PC（此前 warp 共享 PC）
 │ R0..│ R0..│ R0..│ R0..│     │ R0..│ R0..│ R0..│     ← 每个线程独立寄存器
 └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
 ```
@@ -98,7 +98,7 @@ Grid (内核)
 ### Thread（线程）
 
 - 最细粒度的执行单元
-- 每个线程有自己独立的寄存器文件和指令地址（PC）
+- 每个线程有自己独立的寄存器；Volta 及之后还有独立的程序计数器（PC），此前同一 warp 的线程共享 PC
 - 每个线程执行相同的 kernel 函数，但通过 `threadIdx` 索引区分数据
 - 硬件对线程数量没有严格限制（软件层面）
 
@@ -115,7 +115,7 @@ Warp 结构（32 线程）：
 ┌─────────────────────────────────────────────────────────────────┐
 │ Warp 0: IF | ID | [T0 T1 T2 ... T31] 并行执行 ALU              │
 │         T0 的 R0  T1 的 R0  T2 的 R0  ...  T31 的 R0           │
-│         T0 的 PC  T1 的 PC  T2 的 PC  ...  T31 的 PC           │
+│         T0 的 PC  T1 的 PC  T2 的 PC  ...  T31 的 PC           │  ← Volta+
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -128,8 +128,8 @@ Warp 结构（32 线程）：
 
 | 层次 | 硬件对应 | 共享资源 | 同步机制 |
 |------|---------|---------|---------|
-| Thread | CUDA Core（FP32 单元） | 无（私有寄存器） | 不需要 |
-| Warp | Warp Scheduler | 指令单元 | 隐式（SIMT 自动同步） |
+| Thread | 执行单元（FP32/INT32 通道；非一对一映射） | 无（私有寄存器） | 不需要 |
+| Warp | Warp Scheduler | 指令单元 | Volta 前隐式锁步；Volta+ 需 `__syncwarp()` 保证 |
 | Block | SM | 共享内存、寄存器文件 | `__syncthreads()` |
 | Grid | GPU（所有 SM） | 全局内存 | `cudaDeviceSynchronize()` |
 
@@ -150,13 +150,22 @@ dim3 blockDim(128);  // 每个 block 128 个线程
 // Warp 3: Thread 96-127
 ```
 
-线程在 warp 内的索引由 `threadIdx.x` 的低 5 位决定（因为 2^5 = 32）：
+warp 的划分按 block 内的**线性线程编号**进行：线程编号 = `threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y`，每 32 个连续编号组成一个 warp。因此只有当 blockDim.x 是 32 的倍数（或 block 本身是 1D）时，`threadIdx.x` 的低 5 位才恰好等于 warp 内的 lane 编号；对于 `blockDim.x` 不是 32 倍数的 2D/3D block，warp 会跨越 `threadIdx.y` 的行边界，不能简单地用 `threadIdx.x % 32` 计算 lane。
 
 ```c
-int warp_id      = threadIdx.x / 32;           // 哪个 warp
-int lane_id      = threadIdx.x % 32;           // warp 内的位置
+int warp_id      = threadIdx.x / 32;           // 仅当 block 为 1D 或 blockDim.x 为 32 的倍数
+int lane_id      = threadIdx.x % 32;           // 同上
 int global_tid   = blockIdx.x * blockDim.x + threadIdx.x;
 int global_warp  = global_tid / 32;
+```
+
+对于任意维度的 block，应使用线性编号：
+
+```c
+int linear = threadIdx.x + threadIdx.y * blockDim.x
+           + threadIdx.z * blockDim.x * blockDim.y;
+int warp_in_block = linear / 32;
+int lane_id       = linear % 32;
 ```
 
 ### Warp 调度

@@ -12,7 +12,7 @@ Boolean algebra operates on binary values: 0 (false) and 1 (true). Three fundame
 |-----------|----------|-------------|
 | AND       | A . B or A B | True only if both A AND B are true |
 | OR        | A + B        | True if A OR B (or both) is true |
-| NOT       | A' or A or ~A | Inverts the value |
+| NOT       | A' or A̅ or ~A | Inverts the value |
 
 ### Truth Tables for Basic Operations
 
@@ -226,35 +226,19 @@ AB 00  | m0 | m1 | m3 | m2 |
            CD
            00  01  11  10
        +---+---+---+---+
-AB 00  | 1 | 0 | 0 | 1 |  <- A'B' (m0, m2)
+AB 00  | 1 | 0 | 0 | 1 |  <- m0, m2 (A'B'D')
        +---+---+---+---+
-   01  | 0 | 1 | 1 | 0 |  <- A'B (m5, m7)
+   01  | 0 | 1 | 1 | 0 |  <- m5, m7 (A'BD)
        +---+---+---+---+
-   11  | 0 | 0 | 0 | 0 |
+   11  | 0 | 1 | 1 | 0 |  <- m13, m15 (ABD)
        +---+---+---+---+
-   10  | 1 | 0 | 0 | 1 |  <- AB' (m8, m10)
+   10  | 1 | 0 | 0 | 1 |  <- m8, m10 (AB'D')
        +---+---+---+---+
 ```
 
 Groupings:
-- m0 + m2: A'B'C'D' + A'B'CD' = A'B'D'
-- m5 + m7: A'BC'D + A'BCD = A'BD
-- m8 + m10: AB'C'D' + AB'CD' = AB'D'
-- m13 + m15: ABCD + ABC'D = ABD (wait, m15 is 1111, m13 is 1101, so that's ACD? Let me re-check)
-
-Wait, let me verify the groupings:
-- m0 (0000) + m2 (0010) = A'B'C'D' + A'B'CD' = A'B'D'
-- m8 (1000) + m10 (1010) = AB'C'D' + AB'CD' = AB'D'
-
-Actually, wait -- the problem says m5(0101) and m7(0111) and m13(1101) and m15(1111). Let me re-examine.
-
-The truth table I wrote has 1s at 0, 2, 5, 7, 8, 10, 13, 15. Let me look at the CD=01 and CD=11 columns carefully.
-
-Actually, looking at my map: AB=01, CD=01 -> m5=1; AB=01, CD=11 -> m7=1; AB=11, CD=01 -> m13=1; AB=11, CD=11 -> m15=1.
-
-These four (m5, m7, m13, m15) form a group: variable B=1, variable D=1 -> BD.
-
-For m0+m2+m8+m10: A varies (0 and 1), B=0, C varies, D=0. Group: B'D'.
+- m0 + m2 + m8 + m10: B=0, D=0 -> B'D'
+- m5 + m7 + m13 + m15: B=1, D=1 -> BD
 
 Simplified: **F = B'D' + BD = (B XOR D)' = XNOR(B, D)**
 
@@ -284,7 +268,7 @@ A minterm is a product term that includes each variable exactly once (either tru
 
 A maxterm is a sum term that includes each variable exactly once. A function in **product of maxterms** form is the dual.
 
-**Example**: F(A,B) = (A+B) . (A+B') . (A'+B) = product(0, 1, 2)
+**Example** (a different function, to show a nontrivial POS): F(A,B) = (A+B) . (A+B') . (A'+B) = product(0, 1, 2) = A.B
 
 Any function can be expressed as either sum of minterms or product of maxterms -- these are the canonical forms.
 
@@ -309,7 +293,7 @@ Using the consensus theorem: AB + A'C + BC = AB + A'C (the BC term is redundant)
 
 2. Mano, M. M., & Ciletti, M. D. (2018). *Digital Design: With an Introduction to the Verilog HDL, VHDL, and SystemVerilog* (6th ed.). Pearson. Chapter 2: Boolean Algebra and Logic Gates.
 
-3. Patterson, D. A., & Hennessy, J. L. (2017). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Appendix B: The Basics of Logic Design.
+3. Patterson, D. A., & Hennessy, J. L. (2013). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Appendix B: The Basics of Logic Design.
 
 4. Harris, S., & Harris, D. (2015). *Digital Design and Computer Architecture* (2nd ed.). Morgan Kaufmann. Chapter 2: Combinational Logic Design.
 

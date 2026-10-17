@@ -158,8 +158,9 @@ def demo_vmap(batch_size: int = 128, feat_dim: int = 64) -> None:
     results_loop.block_until_ready()
     t_loop = time.perf_counter() - t0
 
-    # vmap — automatic batching
-    batched_fn = vmap(single_row_operation)
+    # vmap — automatic batching.  ``weight`` is shared across the batch,
+    # so its in_axes must be None; otherwise vmap would try to slice it too.
+    batched_fn = vmap(single_row_operation, in_axes=(0, None))
     t0 = time.perf_counter()
     results_vmap = batched_fn(batch, weight).block_until_ready()
     t_vmap = time.perf_counter() - t0
@@ -177,7 +178,7 @@ def demo_vmap(batch_size: int = 128, feat_dim: int = 64) -> None:
     # JIT + vmap combine naturally
     @jit
     def fast_batched_fn(x, w):
-        return vmap(single_row_operation)(x, w)
+        return vmap(single_row_operation, in_axes=(0, None))(x, w)
 
     t0 = time.perf_counter()
     _ = fast_batched_fn(batch, weight).block_until_ready()

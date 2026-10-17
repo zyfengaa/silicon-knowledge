@@ -13,6 +13,7 @@
  */
 
 #include <stdio.h>
+#include <math.h>
 #include <cuda_runtime.h>
 
 #define CUDA_CHECK(call) do {                                      \
@@ -63,25 +64,25 @@ __global__ void vec_add_v1(const float *a, const float *b, float *c, int n) {
 // ===================================================================
 // v2 — Loop unrolling
 // 每个线程处理 4 个元素，减少循环开销，提升指令级并行
+// 关键：4 个元素按 block-stride 排列（idx, idx+blockDim, ...），
+// 使每个指令在 warp 内仍然访问连续地址（合并访问）
 // ===================================================================
 __global__ void vec_add_v2(const float *a, const float *b, float *c, int n) {
-    // 每个线程处理 ELEMS_PER_THREAD 个元素
     const int ELEMS_PER_THREAD = 4;
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    int idx = tid * ELEMS_PER_THREAD;
+    const int block_span = blockDim.x * ELEMS_PER_THREAD;
+    const int grid_stride = gridDim.x * block_span;
 
-    // 手动展开的循环：每个线程处理 4 个连续元素
-    if (idx + 0 < n) {
-        c[idx + 0] = a[idx + 0] + b[idx + 0];
-    }
-    if (idx + 1 < n) {
-        c[idx + 1] = a[idx + 1] + b[idx + 1];
-    }
-    if (idx + 2 < n) {
-        c[idx + 2] = a[idx + 2] + b[idx + 2];
-    }
-    if (idx + 3 < n) {
-        c[idx + 3] = a[idx + 3] + b[idx + 3];
+    for (int base = blockIdx.x * block_span; base < n; base += grid_stride) {
+        // 手动展开：每个线程处理同一 block 段内间隔 blockDim.x 的 4 个元素
+        int idx = base + threadIdx.x;
+        if (idx + 0 * blockDim.x < n)
+            c[idx + 0 * blockDim.x] = a[idx + 0 * blockDim.x] + b[idx + 0 * blockDim.x];
+        if (idx + 1 * blockDim.x < n)
+            c[idx + 1 * blockDim.x] = a[idx + 1 * blockDim.x] + b[idx + 1 * blockDim.x];
+        if (idx + 2 * blockDim.x < n)
+            c[idx + 2 * blockDim.x] = a[idx + 2 * blockDim.x] + b[idx + 2 * blockDim.x];
+        if (idx + 3 * blockDim.x < n)
+            c[idx + 3 * blockDim.x] = a[idx + 3 * blockDim.x] + b[idx + 3 * blockDim.x];
     }
 }
 
@@ -112,13 +113,9 @@ __global__ void vec_add_v3(const float *a, const float *b, float *c, int n) {
         vc.w = __float_as_int(__int_as_float(va.w) + __int_as_float(vb.w));
 
         c4[idx] = vc;
-    }
-
-    // 处理剩余元素 (n % 4 != 0)
-    int remainder_start = n4 * 4;
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid < n && tid >= remainder_start) {
-        c[tid] = a[tid] + b[tid];
+    } else if (idx < n) {
+        // 处理剩余元素 (n % 4 != 0)：最后一个不超过 3 个元素的尾部
+        c[idx] = a[idx] + b[idx];
     }
 }
 
@@ -213,8 +210,8 @@ int main() {
 
     // v3: Vectorized int4
     {
-        int n4 = N / 4;
-        int grid_v3 = (n4 + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        // Grid 按标量元素数启动，因为尾部元素也可能需要处理
+        int grid_v3 = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
         GpuTimer timer;
         timer.begin();
         for (int it = 0; it < NUM_ITERS; it++) {
@@ -248,8 +245,7 @@ int main() {
 
     // 获取 v3 结果
     {
-        int n4 = N / 4;
-        int grid_v3 = (n4 + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        int grid_v3 = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
         vec_add_v3<<<grid_v3, BLOCK_SIZE>>>(d_a, d_b, d_c, N);
         CUDA_CHECK(cudaMemcpy(h_c3, d_c, BYTES, cudaMemcpyDeviceToHost));
     }
@@ -260,8 +256,8 @@ int main() {
     printf("  ---------------------------------------------------------\n");
     for (int i = 0; i < 10; i++) {
         float ref   = h_a[i] + h_b[i];
-        bool ok2    = abs(h_c2[i] - ref) < 1e-4;
-        bool ok3    = abs(h_c3[i] - ref) < 1e-4;
+        bool ok2    = fabsf(h_c2[i] - ref) < 1e-4f;
+        bool ok3    = fabsf(h_c3[i] - ref) < 1e-4f;
         bool ok     = ok2 && ok3;
         printf("  [%3d]   %8.4f       %8.4f       %8.4f       %s\n",
                i, ref, h_c2[i], h_c3[i], ok ? "OK" : "MISMATCH");

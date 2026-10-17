@@ -42,7 +42,7 @@ pip install numpy matplotlib jupyter
 |------|------|
 | **RISC-V GNU Toolchain** | 将 C 编译为 RISC-V 汇编：`riscv64-unknown-elf-gcc` |
 | **Spike** | RISC-V 指令集模拟器（UC Berkeley） |
-| **Venus** | 浏览器内 RISC-V 模拟器 + 调试器（[venus.kvakil.me](https:venus.kvakil.me)） |
+| **Venus** | 浏览器内 RISC-V 模拟器 + 调试器（[venus.kvakil.me](https://venus.kvakil.me)） |
 | **RARS** | RISC-V 汇编 IDE + 模拟器，适合初学者 |
 | **Godbolt (Compiler Explorer)** | 在线查看 C → RISC-V / x86 汇编映射 |
 
@@ -157,7 +157,7 @@ print(jax.devices())  # 应显示 TPU 设备
 
 | 工具 | 用途 |
 |------|------|
-| **Vivado (Xilinx)** | FPGA 设计工具（免费 WebPACK 版） |
+| **Vivado (Xilinx)** | FPGA 设计工具（免费 ML Standard 版） |
 | **Verilator** | 开源 Verilog 仿真器 |
 
 ---

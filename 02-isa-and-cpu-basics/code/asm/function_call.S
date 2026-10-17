@@ -9,6 +9,10 @@
 #   Caller-saved: ra, t0-t6, a0-a7
 #   Callee-saved: s0-s11 (x8-x9, x18-x27)
 #   Stack grows: downward (sp decreases on allocation)
+#   Stack alignment: sp must stay 16-byte aligned at every call site
+#
+# Note: this file uses `mul`, so assemble it with an M-extension target,
+# e.g. -march=rv32im (or rv32im_zicsr as appropriate).
 
 .section .text
 .globl main
@@ -63,7 +67,7 @@ callee_func:
     # expects to remain unchanged.
 
     # Prologue: save callee-saved registers
-    addi sp, sp, -20          # Allocate 20 bytes: ra + 2 saved regs + locals
+    addi sp, sp, -32          # Allocate 32 bytes (16-byte aligned): ra + 2 saved regs + locals
     sw   ra, 16(sp)           # Save return address (needed for nested calls)
     sw   s0, 12(sp)           # Save s0 (callee-saved, caller expects it preserved)
     sw   s1, 8(sp)            # Save s1 (callee-saved)
@@ -87,7 +91,7 @@ loop_start:
     lw   s1, 8(sp)            # Restore s1 to original value
     lw   s0, 12(sp)           # Restore s0 to original value
     lw   ra, 16(sp)           # Restore return address
-    addi sp, sp, 20           # Deallocate stack
+    addi sp, sp, 32           # Deallocate stack
     jalr x0, ra, 0            # Return
 
 # ============================================================

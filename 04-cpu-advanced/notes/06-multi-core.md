@@ -16,10 +16,10 @@
 
 - Dennard scaling（每一代晶体管尺寸缩小 30%，功耗降低 50%）在 2005 年左右失效
 - 晶体管阈值电压降低接近物理极限，漏电流急剧增加
-- 频率提升导致功耗呈立方增长
+- 频率提升本身使动态功耗近似线性增长；若电压随频率一起提高，功耗会呈超线性（在理想化模型中近似立方）增长
 
 **具体数据**：
-- Pentium 4 (Prescott, 2004)：3.8 GHz，130W TDP
+- Pentium 4 (Prescott, 2004)：3.8 GHz，115W TDP
 - 若按趋势继续，10 GHz 处理器的功耗将接近核反应堆水平
 
 **2. ILP 墙（ILP Wall）**
@@ -129,17 +129,17 @@ MESI 是最经典的缓存一致性协议，定义了缓存行的四种状态：
 ```
 Core0 写入在 L1 缓存中的 X（状态为 S）：
 1. Core0 → 发送 Invalidate 请求到总线
-2. Core1 → 将 X 对应缓存行标记为 I（Invalid）
-3. Core1 → 发送 Ack
-4. Core0 → X 状态变为 E（提升）
-5. Core0 → 写入 X → 状态变为 M
+2. 其他核心 → 将 X 对应缓存行标记为 I（Invalid）
+3. 其他核心 → 发送 Ack
+4. Core0 → 收到全部 Ack 后获得独占权限，直接写入并将状态变为 M
+（E 态是在“干净地独占读取”时进入的，不是 S→M 的中间状态）
 ```
 
 ### MOESI 和 MESIF 协议
 
 | 协议 | 额外状态 | 作用 | 使用 |
 |------|---------|------|------|
-| MOESI | O (Owned) | 共享且被修改，主存副本过时 | AMD Opteron, ARM |
+| MOESI | O (Owned) | 共享且被修改，主存副本过时 | AMD 早期 Opteron；ARM AMBA CHI 等采用类似 Owned 的概念 |
 | MESIF | F (Forward) | 指定一个核心作为"转发响应者" | Intel Nehalem+ |
 
 **O（Owned）态**：
@@ -200,11 +200,16 @@ Core1 递增 counter_b:
 ### 伪共享的检测
 
 ```bash
-# Linux Perf: 检测缓存一致性缺失
-perf stat -e cache-misses,cache-references,cache-miss-rate ./program
+# Linux Perf: 查看缓存缺失和一致性相关计数
+perf stat -e cache-misses,cache-references ./program
+
+# 检测伪共享导致的一致性流量（需要硬件支持）
+perf c2c record ./program
+perf c2c report
 
 # Intel VTune / AMD uProf: 专门的"假共享分析"
-# Valgrind: 使用 cachegrind 模拟器检查
+# 注意：Valgrind Cachegrind 只模拟缓存命中/缺失，不建模多核一致性，
+#       因此不能用来检测 false sharing。
 ```
 
 ### 伪共享的解决方案
@@ -212,8 +217,8 @@ perf stat -e cache-misses,cache-references,cache-miss-rate ./program
 **1. 缓存行填充（Cache Line Padding）**
 
 ```c
-// 方案 1：在变量之间插入填充
-struct data {
+// 方案 1：在变量之间插入填充，并让结构体按缓存行对齐
+struct alignas(64) two_counters {
     int counter_a;
     char pad[60];        // 填充到 64 字节边界
     int counter_b;
@@ -292,9 +297,9 @@ Socket 0                     Socket 1
 | L1 缓存命中 | ~1 ns | 极高 |
 | L2 缓存命中 | ~4 ns | 极高 |
 | L3 缓存命中 | ~15 ns | 高 |
-| 本地内存节点 | ~80 ~ 100 ns | ~50 ~ 70 GB/s |
-| 远程内存节点 | ~140 ~ 200 ns | ~20 ~ 40 GB/s |
-| 跨插槽远程 | ~180 ~ 300 ns | ~10 ~ 20 GB/s |
+| 本地内存节点 | ~80 ~ 100 ns | ~200 ~ 400+ GB/s（取决于通道数和平台） |
+| 远程内存节点 | ~140 ~ 200 ns | ~100 ~ 200+ GB/s（取决于互联和平台） |
+| 跨插槽远程 | ~180 ~ 300 ns | ~20 ~ 100 GB/s（取决于互联和平台） |
 
 延迟差异可达 2× ~ 3× 甚至更多。
 
@@ -329,11 +334,17 @@ numastat -p <pid>
 // 使用 libnuma（GNU）
 #include <numa.h>
 
-// 将当前线程绑定到 node 0
-struct bitmask *mask = numa_allocate_cpumask();
-numa_bitmask_setbit(mask, 0);  // Core 0
-numa_bind(mask);
-numa_free_cpumask(mask);
+// 将当前线程绑定到 CPU 0（CPU 亲和性）
+struct bitmask *cpus = numa_allocate_cpumask();
+numa_bitmask_setbit(cpus, 0);
+numa_sched_setaffinity(0, cpus);
+numa_free_cpumask(cpus);
+
+// 将内存分配策略绑定到 node 0（内存策略；参数是 nodemask）
+struct bitmask *nodes = numa_allocate_nodemask();
+numa_bitmask_setbit(nodes, 0);
+numa_set_membind(nodes);
+numa_free_nodemask(nodes);
 
 // 在当前 node 上分配内存
 void *p = numa_alloc_local(size);
@@ -376,7 +387,7 @@ void *p = numa_alloc_onnode(size, node_id);
 
 - Hennessy, J. L. & Patterson, D. A. *Computer Architecture: A Quantitative Approach*, 6th Edition, Chapter 5: Multiprocessors and Thread-Level Parallelism.
 - Patterson, D. A. & Hennessy, J. L. *Computer Organization and Design*, Chapter 6: Multicore, Multiprocessors, and Clusters.
-- Papamarcos, M. S. & Patel, J. H. "A New Cache Coherence Scheme for Shared-Memory Multiprocessors." *ISCA*, 1984.
+- Papamarcos, M. S. & Patel, J. H. "A Low-Overhead Coherence Solution for Multiprocessors with Private Cache Memories." *ISCA*, 1984.
 - Laudon, J. & Lenoski, D. "The SGI Origin: A ccNUMA Highly Scalable Server." *ISCA*, 1997.
 - Bolosky, W. J. & Scott, M. L. "False Sharing and Its Effect on Shared Memory Performance." *USENIX SEDMS*, 1993.
 - AMD. *AMD64 Architecture Programmer's Manual: Volume 2 — System Programming*, Chapter 7: Multicore and NUMA.

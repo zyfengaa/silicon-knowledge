@@ -9,7 +9,7 @@
 | 笔记 | 主题 | 核心问题 |
 |------|------|---------|
 | 01 | **为什么需要 NPU** | AI 工作负载的计算和内存访问特征 |
-| 02 | **脉动阵列** | 一维/二维脉动阵列、三种数据流策略（WS/IS/OS） |
+| 02 | **脉动阵列** | 一维/二维脉动阵列、四种数据流策略（WS/IS/OS/RS） |
 | 03 | **映射 GEMM** | 矩阵乘如何映射到脉动阵列的 PE 上 |
 | 04 | **量化** | INT8/INT4/BF16/FP16 格式、训练感知量化、校准 |
 | 05 | **稀疏性** | 剪枝、zero-skipping、结构化稀疏与非结构化稀疏 |
@@ -19,7 +19,7 @@
 
 ## 前置知识
 
-- [05 存储层次](/05-memory-hierarchy/)（理解带宽和延迟概念）
+- [05 存储层次](../05-memory-hierarchy/)（理解带宽和延迟概念）
 
 ## 建议学习方式
 
@@ -33,7 +33,7 @@
 
 | 文件 | 内容 |
 |------|------|
-| `python/systolic_sim.py` | 二维脉动阵列的 GEMM 模拟器，支持切换数据流策略 |
+| `python/systolic_sim.py` | 二维脉动阵列的 GEMM 模拟器，支持切换数据流策略（仅验证数值等价，不含周期级时序） |
 | `python/quantization_demo.py` | FP32 ↔ INT8 量化/反量化过程演示 |
 | `python/tvm_demo/` | 使用 TVM 编译和推理简单模型的示例 |
 
@@ -49,6 +49,6 @@
 
 - Kung, H.T. "Why Systolic Architectures?" *IEEE Computer* 1982.
 - Chen, Y.H. et al. "Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow..." *ISCA'16*.
-- Chen, T. et al. "DianNao: A Small-Footprint High-Throughput Accelerator..." *MICRO'14*.
+- Chen, T. et al. "DianNao: A Small-Footprint High-Throughput Accelerator..." *ASPLOS'14*.
 - Jouppi, N. et al. "In-Datacenter Performance Analysis of a Tensor Processing Unit." *ISCA'17*.
 - [Apache TVM 文档](https://tvm.apache.org/docs/)

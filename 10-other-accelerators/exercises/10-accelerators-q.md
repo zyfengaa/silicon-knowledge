@@ -61,7 +61,7 @@ c) 假设一个程序的计算密集度远高于访存密集度（如大型矩�
 
 - CPU 每周期有大约 5-15% 功耗用于取指/译码，额外的功耗用于 OOO（out-of-order execution / 乱序执行）、分支预测、缓存一致性
 - GPU 有 warp 调度器、共享资源管理开销
-- FPGA 的控制路径开销为零——"电路就是控制"
+- FPGA 几乎没有指令取指/译码和动态调度开销——"电路就是控制"
 
 **c) 频率差异**
 
@@ -77,7 +77,7 @@ c) 假设一个程序的计算密集度远高于访存密集度（如大型矩�
 
 **b) ResNet-152 大批量推理 → GPU**
 
-原因：大批量推理可以充分利用 GPU 的 Tensor Core，实现极高的吞吐量。FPGA 的峰值 FLOPS 远低于 GPU（4.2 vs 19.5 TFLOPS），在大批量下效率不如 GPU。
+原因：大批量推理可以充分利用 GPU 的 Tensor Core，实现极高的吞吐量。FPGA 的 INT8 吞吐约 4.2 TOPS，而 A100 的 FP32 约 19.5 TFLOPS；两者精度不同，不能直接比较，但大批量下 GPU 的 Tensor Core 仍有明显优势。
 
 **c) 超低延迟推理 → FPGA**
 
@@ -135,7 +135,7 @@ AI (0.17) << Ridge Point (5) → 强烈 memory-bound
 
 **b) HBM-PIM 的改善**
 
-HBM-PIM 在每个 DRAM bank 添加了一个 8-bit ALU。SAXPY 的执行变为：
+HBM-PIM 在近 bank 处集成了 16-lane FP16 SIMD 浮点单元（PCU，通常每 2 个 bank 共享一个）。SAXPY 的执行变为：
 
 ```
 传统:
@@ -144,11 +144,11 @@ CPU 发出 load 指令 → 数据通过总线传到 CPU → 计算 → 写回 DR
 HBM-PIM:
 CPU 向 PIM bank 发送 "执行 SAXPY" 命令
 PIM bank 内:
-  Bank 行缓冲 → PCU (ALU) → 写回行缓冲
+  Bank 行缓冲 → PCU (FP16 SIMD) → 写回行缓冲
   数据在 DRAM bank 内部完成计算，不经过片外总线
 
 改善的关键环节:
-1. 消除数据搬运能耗（约 180 pJ/word 的 DRAM 访问能耗节省）
+1. 消除数据搬运能耗（约 640 pJ/word 的片外 DRAM 访问能耗节省，Horowitz 数据）
 2. 释放片外总线带宽
 3. 提高内存带宽利用率（从 10-30% 到 70-90%）
 ```

@@ -79,14 +79,14 @@ Google TPU v1中采用的就是二维脉动阵列。其计算过程可以直观�
 
 每个PE的微架构包含以下关键组件：
 
-1. **乘法器（Multiplier）**：执行定点或浮点乘法运算。在INT8精度下，乘法器面积仅约 $400 \ \mu m^2$（7nm工艺），功耗约 $0.2 \ \text{pJ}$。
+1. **乘法器（Multiplier）**：执行定点或浮点乘法运算。INT8 乘法器的面积和功耗远低于 FP32，但具体数值强烈依赖工艺节点、标准单元库和综合约束，不宜写死为某个数值。
 2. **累加器（Accumulator）**：一个寄存器和一个加法器组成的反馈环路。累加器的位宽通常高于输入数据位宽，以防止溢出——例如，对INT8输入使用INT32累加器。
 3. **数据路径多路选择器**：控制数据的流入方向和来源，支持不同的数据流模式。
 4. **本地寄存器文件**：在Weight Stationary模式中用于存储权重，或在Input Stationary模式中存储激活值。
 
 ## 4. 三种数据流模式及其比较
 
-数据流（Dataflow）决定了在计算过程中哪一类数据保持在PE内部、哪一类数据在PE之间流动。Eyeriss（Chen et al., 2016）系统地分析了三种数据流模式的特点。
+数据流（Dataflow）决定了在计算过程中哪一类数据保持在PE内部、哪一类数据在PE之间流动。Eyeriss（Chen et al., 2016）提出并系统分析了四种数据流：权值固定（WS）、输入固定（IS）、输出固定（OS）与行固定（Row Stationary, RS）。需要强调，**RS 是 Eyeriss 的核心贡献**，而不是只有 WS/IS/OS 三种。
 
 ### 4.1 权值固定（Weight Stationary, WS）
 
@@ -127,17 +127,32 @@ Google TPU v1中采用的就是二维脉动阵列。其计算过程可以直观�
 - 权重和输入数据都需要全局分发，对片上互连带宽要求高；
 - 输出通道数较少时，OS模式的利用率可能下降。
 
-### 4.4 三种数据流的定量对比
+### 4.4 行固定（Row Stationary, RS）
 
-Eyeriss的分析表明（基于65nm工艺），在典型卷积层配置下：
+**工作机制**：每个 PE 固定卷积滤波器的一行（或多行）权值以及对应的一行激活值，在本地完成一维卷积的部分和计算；部分和再按行/列方向在 PE 之间传递，最终组合成完整的输出块。RS 的目标是在一次计算中同时复用权值、激活值和部分和，尽量减少对 SRAM/DRAM 的访问。
 
-| 数据流模式 | 每次MAC的DRAM访问（字节） | 每次MAC的SRAM访问（字节） | 每次MAC的RF访问（字节） | 相对能耗 |
-|-----------|--------------------------|--------------------------|--------------------------|---------|
-| WS        | 0.05                     | 1.5                      | 4.0                      | 1.0x    |
-| IS        | 0.06                     | 2.0                      | 3.5                      | 1.2x    |
-| OS        | 0.07                     | 1.8                      | 3.0                      | 1.1x    |
+**优点**：
+- 同时考虑了权值、激活和部分和三类数据的复用，适合卷积层中滤波器较小、通道较多的场景；
+- 相比纯 WS/IS/OS，能显著降低片外和 SRAM 访问带来的能耗；
+- Eyeriss 通过配置不同的映射，可在不同卷积层形状下选择较合适的数据流。
 
-需要注意的是，上述对比高度依赖于具体的网络层参数和阵列尺寸。实际设计中选择哪种数据流，需要根据目标工作负载的特征进行**设计空间探索（Design Space Exploration）**。Eyeriss架构的一个关键创新就是支持数据流的运行时配置，使其可以根据不同卷积层的特点动态切换。
+**缺点**：
+- 数据映射和调度较复杂，需要编译器/配置逻辑支持；
+- PE 间的部分和传递路径较长，对互连和寄存器文件设计提出更高要求；
+- 对全连接层或不规则算子的收益有限。
+
+### 4.5 四种数据流的定性比较
+
+Eyeriss 的分析表明，不同数据流在权值、激活和部分和的复用上各有侧重。下面的定性对比不依赖具体工艺与层参数：
+
+| 数据流模式 | PE 内固定 | 主要流动数据 | 适用场景 | 主要代价 |
+|-----------|-----------|--------------|----------|----------|
+| WS | 权值 | 激活、部分和 | 权值复用高的卷积层 | 激活/部分和路径冲突 |
+| IS | 输入激活 | 权值、部分和 | 输入通道多、输出通道少 | 权值搬运量大 |
+| OS | 输出部分和 | 权值、激活 | 输出通道多、需宽累加 | 权值与激活的全局分发 |
+| RS | 滤波器行 + 激活行 | 部分和 | 小滤波器、多通道卷积 | 映射复杂、互连要求高 |
+
+需要注意的是，上述对比高度依赖于具体的网络层参数和阵列尺寸。实际设计中选择哪种数据流，需要根据目标工作负载的特征进行**设计空间探索（Design Space Exploration）**。Eyeriss 架构的一个关键创新就是支持多种数据流映射的配置，使其可以根据不同卷积层的特点选择较合适的方案。
 
 ## 5. 脉动阵列的优缺点总结
 
@@ -159,7 +174,7 @@ Eyeriss的分析表明（基于65nm工艺），在典型卷积层配置下：
 
 1. Kung, H. T. "Why Systolic Architectures?" *IEEE Computer*, 15(1):37-46, 1982.
 
-2. Chen, Y.-H., Krishna, T., Emer, J., & Sze, V. "Eyeriss: An Energy-Efficient Reconfigurable Accelerator for Deep Convolutional Neural Networks." *Proceedings of the 43rd Annual IEEE/ACM International Symposium on Computer Architecture (ISCA)*, 2016.
+2. Chen, Y.-H., Emer, J., & Sze, V. "Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks." *Proceedings of the 43rd Annual IEEE/ACM International Symposium on Computer Architecture (ISCA)*, 2016.
 
 3. Jouppi, N. P., et al. "In-Datacenter Performance Analysis of a Tensor Processing Unit." *Proceedings of the 44th Annual International Symposium on Computer Architecture (ISCA)*, 2017.
 
@@ -170,3 +185,5 @@ Eyeriss的分析表明（基于65nm工艺），在典型卷积层配置下：
 6. Chen, T., et al. "DianNao: A Small-Footprint High-Throughput Accelerator for Ubiquitous Machine-Learning." *Proceedings of the 19th International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS)*, 2014.
 
 7. Horowitz, M. "Computing's Energy Problem (and what we can do about it)." *IEEE International Solid-State Circuits Conference (ISSCC) Digest of Technical Papers*, 2014.
+
+8. Chen, Y.-H., Yang, T.-J., Emer, J., & Sze, V. "Eyeriss v2: A Flexible Accelerator for Emerging Deep Neural Networks on Mobile Devices." *IEEE Journal on Emerging and Selected Topics in Circuits and Systems (JETCAS)*, 9(2), 2019.

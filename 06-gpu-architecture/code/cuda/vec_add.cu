@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <sys/time.h>
+#include <chrono>
 
 #define N (1 << 20)  // 1,048,576 个元素
 
@@ -36,11 +36,10 @@ __global__ void vec_add_gpu(const float *a, const float *b, float *c, int n) {
     }
 }
 
-// 计时辅助函数（秒级精度）
+// 计时辅助函数（返回秒）
 double get_time() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec + tv.tv_usec * 1e-6;
+    using clock = std::chrono::steady_clock;
+    return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
 }
 
 // 验证前几个元素
@@ -80,9 +79,9 @@ int main() {
     // === GPU 版本 ===
     // 分配设备内存
     float *d_a, *d_b, *d_c;
-    cudaMalloc(&d_a, N * sizeof(float));
-    cudaMalloc(&d_b, N * sizeof(float));
-    cudaMalloc(&d_c, N * sizeof(float));
+    cudaMalloc((void **)&d_a, N * sizeof(float));
+    cudaMalloc((void **)&d_b, N * sizeof(float));
+    cudaMalloc((void **)&d_c, N * sizeof(float));
 
     // 计时：包含数据拷贝 + kernel 执行
     t_start = get_time();

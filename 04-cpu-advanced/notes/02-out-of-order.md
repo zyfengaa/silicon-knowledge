@@ -31,12 +31,12 @@ MUL X7, X8, X9     ; 完全独立
 
 ### 1. 重排序缓冲（Reorder Buffer, ROB）
 
-**功能**：ROB 是一个循环缓冲（circular buffer），按程序顺序记录所有在途（in-flight）指令的信息。当指令执行完成时，结果暂时保存在 ROB 中；当指令到达 ROB 的头部时，才正式提交。
+**功能**：ROB 是一个循环缓冲（circular buffer），按程序顺序记录所有在途（in-flight）指令的信息。当指令执行完成时，结果通常写入物理寄存器堆（PRF）；ROB 记录该指令的完成状态、异常状态和目标物理寄存器号。当指令到达 ROB 的头部时，才正式提交。P6 等早期设计把结果暂存在 ROB 条目中，提交时再写入架构寄存器；现代 PRF 设计则把结果直接写入物理寄存器堆，ROB 只保存状态和物理寄存器号。
 
 **ROB 的作用**：
 - **按序提交**：保证程序正确性（精确异常、按序写回）
 - **保存推测状态**：分支误预测后，可以快速清空 ROB 中误路径上的指令
-- **寄存器的临时快照**：提供寄存器重命名的存储空间
+- **支持重命名恢复**：记录物理寄存器映射或配合 RAT 检查点，在误预测时恢复重命名状态；重命名存储本身由 PRF + RAT 提供，ROB 不是重命名存储
 
 **ROB 条目典型格式**：
 
@@ -53,7 +53,7 @@ MUL X7, X8, X9     ; 完全独立
 
 | CPU | ROB 条目数 |
 |-----|-----------|
-| Intel Core (1st gen) | 128 |
+| Intel Nehalem | 128 |
 | Intel Golden Cove | 512 |
 | AMD Zen 4 | 320 |
 | Apple M1 Firestorm | 630+ |
@@ -180,5 +180,5 @@ MUL.D F6, F8, F10  // 独立 → 可以先执行
 
 - Tomasulo, R. M. "An Efficient Algorithm for Exploiting Multiple Arithmetic Units." *IBM Journal of Research and Development*, Vol. 11, No. 1, pp. 25–33, 1967.
 - Hennessy, J. L. & Patterson, D. A. *Computer Architecture: A Quantitative Approach*, 6th Edition, Chapter 3: Instruction-Level Parallelism and Its Exploitation.
-- Sima, D. et al. "The Architecture of the Pentium Processor." *IEEE Micro*, 1993.
+- Alpert, D. & Avnon, D. "Architecture of the Pentium Microprocessor." *IEEE Micro*, 1993.
 - Smith, J. E. & Pleszkun, A. R. "Implementation of Precise Interrupts in Pipelined Processors." *ISCA*, 1985.

@@ -95,9 +95,9 @@ cudaMemcpyAsync(d_a, h_a, size, cudaMemcpyHostToDevice, stream);
 ```
 
 **为什么需要 Pinned Memory：**
-- Pageable Memory 可能被 OS 换出到磁盘
-- GPU DMA 引擎需要物理地址连续的页面
-- 使用 Pinned Memory 后，DMA 引擎可以直接在 Host 和 Device 之间传输数据，不需要 CPU 中转
+- Pageable Memory 可能被 OS 换出到磁盘，DMA 过程中不能保证页面驻留
+- DMA 需要访问物理地址稳定的页面；Pinned（page-locked）内存保证页面常驻且地址固定
+- 使用 Pinned Memory 后，DMA 引擎可以直接在 Host 和 Device 之间传输，不需要驱动先用暂存缓冲区中转。支持 IOMMU 的系统也能映射 pageable 内存，但仍需额外的映射/暂存步骤，通常更慢
 
 ## 重叠模式 (Overlap Pattern)
 
@@ -234,6 +234,47 @@ cudaStreamCreateWithPriority(&low_prio, cudaStreamNonBlocking, priority_low);
 2. **多 GPU 通信**：每个 GPU 对应一个 Stream
 3. **优先级调度**：控制计算与数据加载的优先级
 4. **并发 MPS**：多进程通过 MPS 共享 GPU 时各自使用 Stream
+
+## CUDA Graphs
+
+当同一组 kernel/拷贝被反复提交时，逐次启动的 CPU 开销和驱动开销会变得显著。**CUDA Graphs** 把一串操作记录成图，之后一次启动即可重放：
+
+```cuda
+cudaGraph_t graph;
+cudaGraphExec_t graphExec;
+
+// 1. 捕获一段 stream 上的操作（也可用 cudaGraphAdd* 手工构图）
+cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
+kernel_a<<<grid, block, 0, stream>>>(d_a);
+kernel_b<<<grid, block, 0, stream>>>(d_b);
+cudaStreamEndCapture(stream, &graph);
+
+// 2. 实例化
+cudaGraphInstantiate(&graphExec, graph, NULL, NULL, 0);
+
+// 3. 反复启动（每次只有一次 API 调用）
+for (int i = 0; i < iters; ++i) {
+    cudaGraphLaunch(graphExec, stream);
+}
+
+cudaGraphExecDestroy(graphExec);
+cudaGraphDestroy(graph);
+```
+
+适用场景：固定拓扑的迭代训练循环、推理服务中重复的 pre/post-processing、参数更新等。
+
+### cudaMallocAsync 与内存池
+
+频繁 `cudaMalloc`/`cudaFree` 会造成同步和碎片。CUDA 11.2 起提供的流序内存分配器把分配/释放也变成 stream 上的异步操作：
+
+```cuda
+void *ptr;
+cudaMallocAsync(&ptr, bytes, stream);
+// ... 在 stream 上使用 ptr ...
+cudaFreeAsync(ptr, stream);
+```
+
+底层是 per-device 的 memory pool，可通过 `cudaMemPoolSetAttribute` 调整保留策略。它与 CUDA Graphs 配合良好，适合动态形状/动态生命周期的 kernel。
 
 ## 调试 Stream
 

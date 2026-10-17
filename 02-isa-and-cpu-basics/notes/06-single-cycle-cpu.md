@@ -30,7 +30,7 @@ A **single-cycle CPU** executes every instruction in exactly one clock cycle. Th
       |                    | ReadAddr1 (rs1) -> RD1    |
       |                    | ReadAddr2 (rs2) -> RD2    |
       | +---> PC MUX       | WriteAddr (rd)            |
-      | |                 | WriteData (ALU or Mem)    |
+      | |                 | WriteData (ALU/Mem/PC+4)|
       | |                 | RegWrite (control)        |
       | |                 +----------------+----------+
       | |                                  |
@@ -45,7 +45,7 @@ A **single-cycle CPU** executes every instruction in exactly one clock cycle. Th
       | |           v         v            v          |
       | |      +-----------------------------------+  |
       | |      |               ALU                 |  |
-      | |      |  Input A = RD1                    |  |
+      | |      |  Input A = MUX(RD1, PC, 0)        |  |
       | |      |  Input B = MUX(RD2, Imm)          |  |
       | |      |  ALU control from funct3/funct7   |  |
       | |      |  and ALUOp from control unit      |  |
@@ -104,8 +104,8 @@ A **single-cycle CPU** executes every instruction in exactly one clock cycle. Th
   - J-type: sign-extend bits [31], [19:12], [20], [30:21]
 
 #### 5. ALU
-- Performs ADD, SUB, AND, OR, XOR, SLT, SLL, SRL, SRA
-- Generates Zero flag (output = 0) for branch comparison
+- Performs ADD, SUB, AND, OR, XOR, SLT, SLTU, SLL, SRL, SRA
+- Generates `Zero`, `Less` (signed), and `LessU` (unsigned) flags for branch comparison
 - ALU control is derived from ALUOp (from main control), funct3, and funct7
 
 #### 6. Data Memory
@@ -116,7 +116,7 @@ A **single-cycle CPU** executes every instruction in exactly one clock cycle. Th
 
 #### 7. Control Unit
 - Generates all control signals from opcode (plus funct3/funct7 for ALU)
-- Signals: RegWrite, ALUSrc, MemWrite, MemRead, MemtoReg, Branch, Jump, ALUOp
+- Signals: RegWrite, ALUSrcA, ALUSrc, MemWrite, MemRead, MemtoReg, PCtoReg, Branch, Jump, ALUOp
 
 ### Critical Path Analysis
 
@@ -151,7 +151,7 @@ For a SW instruction, data memory latency is included (write), but the write-bac
 Cycle time = max(critical path among all instructions)
 
 For LW:    850 ps  (longest)
-For SW:    700 ps
+For SW:    750 ps
 For R-type: 600 ps
 For branch: 550 ps
 
@@ -170,12 +170,12 @@ Frequency  = 1 / 850 ps = ~1.18 GHz
 | Register file data     | 32    | 32-bit GPRs                              |
 | ALU result              | 32    |                                          |
 | Data memory address     | 32    | Physical address space                   |
-| Control signals        | ~10   | 1-bit each except ALUOp (2 bits)         |
+| Control signals        | ~13   | 1-bit each except ALUOp and ALUSrcA       |
 
 ### Assumptions and Simplifications
 
 The single-cycle model makes these simplifications:
-1. **Separate instruction and data memories** (Harvard architecture) -- avoids read-after-write conflicts
+1. **Separate instruction and data memories** (Harvard architecture) -- allows an instruction fetch and a data access in the same cycle
 2. **Register file writes happen at the end of the cycle** -- allows same-cycle read-after-write
 3. **All memories have zero setup time** -- in reality, SRAM/DRAM have timing constraints
 4. **No forwarding or hazard detection** -- each instruction is independent
@@ -203,5 +203,5 @@ Clock    |   |   |   |   |   |   |   |   |   |
 ### References
 
 1. Patterson, D. A., & Hennessy, J. L. *Computer Organization and Design: The Hardware/Software Interface*. RISC-V Edition. Morgan Kaufmann. Chapter 4, Sections 4.1--4.5.
-2. Harris, S., & Harris, D. *Digital Design and Computer Architecture: RISC-V Edition*. Morgan Kaufmann, 2021. Chapter 7, Section 7.5.
+2. Harris, S., & Harris, D. *Digital Design and Computer Architecture: RISC-V Edition*. Morgan Kaufmann, 2021. Chapter 7, Section 7.3.
 3. Hennessy, J. L., & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 6th Edition. Morgan Kaufmann. Appendix C, Sections C.1--C.3.

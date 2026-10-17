@@ -22,6 +22,8 @@ Multi-cycle:       [ IF ] [ ID ] [ EX ] [ MEM ] [ WB ]  <-- 1-5 short cycles
 
 For at least one instruction type the number of cycles matches the single-cycle stages. But each individual cycle is shorter.
 
+**Important detail**: the IF state already performs `PC = PC + 4`. Therefore, when a later state computes a PC-relative target, the original instruction address is no longer in PC. The datapath saves the pre-increment value in a temporary register (`PC_old`) during IF, and later states compute `PC_old + Imm`. An equivalent implementation gives the ALU A-input mux a `PC - 4` selection.
+
 ### Instruction Breakdown by Cycles
 
 #### LW (Load Word) -- 5 cycles
@@ -58,7 +60,7 @@ For at least one instruction type the number of cycles matches the single-cycle 
 |-------|-------|-----------|
 | 1     | IF    | IR = Mem[PC]; PC = PC + 4 |
 | 2     | ID    | A = Reg[rs1]; B = Reg[rs2]; Imm = sign-extend(imm) |
-| 3     | EX    | ALUOut = PC + Imm (branch target); if A == B, PC = ALUOut |
+| 3     | EX    | ALUOut = PC_old + Imm (branch target); if A == B, PC = ALUOut |
 
 #### JAL -- 3 cycles
 
@@ -66,7 +68,7 @@ For at least one instruction type the number of cycles matches the single-cycle 
 |-------|-------|-----------|
 | 1     | IF    | IR = Mem[PC]; PC = PC + 4 |
 | 2     | ID    | A = Reg[rs1]; Imm = sign-extend(imm) |
-| 3     | EX    | ALUOut = PC + Imm; Reg[ra] = PC; PC = ALUOut |
+| 3     | EX    | ALUOut = PC_old + Imm; Reg[ra] = PC (the already-updated PC+4); PC = ALUOut |
 
 ### State Machine for Multi-Cycle Control
 
@@ -117,6 +119,7 @@ The multi-cycle datapath adds registers between stages to hold intermediate resu
 | ALUOut   | ALU result (from EX)          |
 | Data     | Data memory output (from MEM)  |
 | PC       | Program counter                |
+| PC_old   | Pre-increment PC saved during IF (used for PC-relative targets) |
 
 These registers allow resource sharing: the ALU can be used for PC+4 in one cycle and for address calculation in the next.
 
@@ -126,8 +129,10 @@ Each state asserts a specific set of control signals:
 
 | State | Control Signals                                                         |
 |-------|-------------------------------------------------------------------------|
-| IF    | IorD = 0 (PC to memory); IRWrite = 1; PCWrite = 1; ALUSrcA = 0 (PC), ALUSrcB = 01 (4); ALUOp = 00 (ADD) |
-| ID    | ALUSrcA = 0 (PC); ALUSrcB = 11 (imm); ALUOp = 00 (ADD) -- computes branch target |
+| IF    | IorD = 0 (PC to memory); IRWrite = 1; PCWrite = 1; PC_old = PC (save before increment); ALUSrcA = 0 (PC), ALUSrcB = 01 (4); ALUOp = 00 (ADD) |
+| ID    | A = Reg[rs1]; B = Reg[rs2]; Imm = sign-extend(imm) -- operands latched for the next state |
+| EX_BR | ALUSrcA = 0 (PC_old); ALUSrcB = 10 (imm); ALUOp = 00 (ADD) -- target = PC_old + Imm; a comparator checks A vs. B |
+| EX_JAL| ALUSrcA = 0 (PC_old); ALUSrcB = 10 (imm); ALUOp = 00 (ADD) -- target = PC_old + Imm; Reg[ra] = PC (already PC_old + 4) |
 | EX_R  | ALUSrcA = 1 (A); ALUSrcB = 00 (B); ALUOp = 10 (decode from funct) |
 | EX_LW | ALUSrcA = 1 (A); ALUSrcB = 10 (imm); ALUOp = 00 (ADD) |
 | EX_SW | ALUSrcA = 1 (A); ALUSrcB = 10 (imm); ALUOp = 00 (ADD) |
@@ -211,6 +216,6 @@ Wait -- multi-cycle is slower? Multi-cycle was primarily motivated by hardware c
 ### References
 
 1. Patterson, D. A., & Hennessy, J. L. *Computer Organization and Design: The Hardware/Software Interface*. RISC-V Edition. Morgan Kaufmann. Chapter 4, Section 4.6.
-2. Harris, S., & Harris, D. *Digital Design and Computer Architecture: RISC-V Edition*. Morgan Kaufmann, 2021. Chapter 7, Section 7.6.
+2. Harris, S., & Harris, D. *Digital Design and Computer Architecture: RISC-V Edition*. Morgan Kaufmann, 2021. Chapter 7, Section 7.4.
 3. Hennessy, J. L., & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 6th Edition. Morgan Kaufmann. Appendix C, Sections C.4--C.5.
-4. Patterson, D. A. "Reduced Instruction Set Computers." *Communications of the ACM*, Vol. 28 No. 1, 1985 -- original RISC-I paper that motivated the multi-cycle approach for cost reduction.
+4. Patterson, D. A., & Séquin, C. H. "RISC I: A Reduced Instruction Set VLSI Computer." *Proceedings of the 8th Annual Symposium on Computer Architecture (ISCA)*, 1981. (Patterson's 1985 *Communications of the ACM* article "Reduced Instruction Set Computers" is a later survey, not the original RISC-I paper.)

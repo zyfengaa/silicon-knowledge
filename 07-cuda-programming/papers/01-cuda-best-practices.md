@@ -28,7 +28,7 @@ The occupancy API (`cudaOccupancyMaxPotentialBlockSize`, `cudaOccupancyMaxActive
 
 ### 2. Memory Coalescing Patterns
 
-Global memory bandwidth is the most common bottleneck in GPU kernels. The GPU memory controller coalesces multiple thread accesses into a single wide transaction (32 bytes, 128 bytes, or a cache line of 512 bytes on modern architectures). The guide identifies the key principle:
+Global memory bandwidth is the most common bottleneck in GPU kernels. The GPU memory controller coalesces multiple thread accesses into wide transactions: the L2 cache line is 128 bytes, and transfers are handled in 32-byte sectors. The guide identifies the key principle:
 
 > Adjacent threads in a warp should access adjacent memory addresses.
 
@@ -107,9 +107,9 @@ The guide emphasizes that premature optimization without profiling is wasteful: 
 
 **Coalescing is the single most impactful optimization**: In my experience, fixing a non-coalesced access pattern from 10% efficiency to 100% efficiency yields a 5-10x speedup -- far more than any other single optimization. The guide rightly prioritizes memory access pattern analysis. The AoS-to-SoA transformation alone accounts for more performance wins than all other optimizations combined in many real-world applications (particle simulations, N-body, graph layout).
 
-**Profiling infrastructure is undervalued**: The guide's profiling-driven approach is sound, but in practice, the learning curve for Nsight Compute is steep. Many developers skip profiling entirely and guess at optimizations. A dedicated section teaching developers how to read the five most important metrics (gld_efficiency, achieved_occupancy, shared_efficiency, L1 hit rate, compute utilization) would be the most impactful addition to a future edition.
+**Profiling infrastructure is undervalued**: The guide's profiling-driven approach is sound, but in practice, the learning curve for Nsight Compute is steep. Many developers skip profiling entirely and guess at optimizations. A dedicated section teaching developers how to read the five most important metrics (memory throughput, achieved occupancy, L1/L2 hit rate, compute utilization, and warp stall reasons) would be the most impactful addition to a future edition.
 
-**Streams are architecture-dependent**: The concurrency behavior of streams has changed across GPU generations. Fermi had 16 hardware work queues (not exposed for concurrency), Kepler introduced 32 Hyper-Q queues, and Maxwell/Pascal refined the scheduling. Developers targeting multiple GPU generations must be aware that stream behavior (and the benefit of multiple streams) varies significantly. The guide could benefit from an architecture-specific concurrency matrix.
+**Streams are architecture-dependent**: The concurrency behavior of streams has changed across GPU generations. Fermi used a single hardware work queue, so kernels from different streams could serialize on false dependencies; Kepler introduced 32 Hyper-Q hardware queues, which made concurrent streams practical. Maxwell/Pascal and later refined the scheduling. Developers targeting multiple GPU generations must be aware that stream behavior (and the benefit of multiple streams) varies significantly. The guide could benefit from an architecture-specific concurrency matrix.
 
 **Best practices age well, but not perfectly**: The core principles (coalescing, occupancy, bank conflict avoidance) have been stable since CUDA 1.0. However, newer features like CUDA Graphs (CUDA 10), asynchronous memory pools (CUDA 11), and thread block clusters (Hopper, SM 90) introduce optimization strategies that the original best practices framework does not fully cover. A supplement covering "best practices for modern CUDA" would be valuable.
 
@@ -122,5 +122,5 @@ The guide emphasizes that premature optimization without profiling is wasteful: 
 3. NVIDIA. *Nsight Compute Documentation*. https://docs.nvidia.com/nsight-compute/ -- Profiling 指标说明
 4. NVIDIA. *CUDA Occupancy Calculator*. https://docs.nvidia.com/cuda/cuda-occupancy-calculator/ -- Occupancy 计算工具
 5. Harris, Mark. "How to Access Global Memory Efficiently." NVIDIA Developer Blog, 2013. https://developer.nvidia.com/blog/how-access-global-memory-efficiently-cuda-kernel/ -- Global Memory Coalescing 详解
-6. NVIDIA. "CUDA Pro Tip: Vectorized Memory Access." NVIDIA Developer Blog, 2015. -- Vectorized Memory Access 技巧
+6. NVIDIA. "CUDA Pro Tip: Increase Performance with Vectorized Memory Access." NVIDIA Developer Blog, 2013. -- Vectorized Memory Access 技巧
 7. Kirk, David B., and Wen-mei W. Hwu. *Programming Massively Parallel Processors: A Hands-on Approach*. 3rd ed., Morgan Kaufmann, 2016. -- 第 6 章 Performance Considerations，第 9 章 Advanced Optimizations

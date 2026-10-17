@@ -75,10 +75,11 @@ CPU 内存和 GPU 显存完全独立
 需要显式的 cudaMemcpy 传输
 程序员必须管理数据移动
 
-CPU + GPU 共享内存 (APU 模式):
-AMD APU, NVIDIA Grace Hopper
-物理上共享同一个内存控制器
-无需显式拷贝，但带宽可能受限
+CPU + GPU 统一地址空间 (APU / Grace Hopper):
+AMD APU: CPU/GPU 在同一 die 上共享内存控制器
+NVIDIA Grace Hopper: CPU 和 GPU 通过 NVLink-C2C 保持缓存一致，
+但 CPU 使用 LPDDR5X、GPU 使用 HBM3，物理内存是分离的，
+不是共享同一个内存控制器
 ```
 
 ### 2.3 数据移动开销
@@ -87,7 +88,7 @@ AMD APU, NVIDIA Grace Hopper
 CPU → GPU 数据传输延迟:
 PCIe Gen4 x16: ~25 GB/s 单向
 PCIe Gen5 x16: ~50 GB/s 单向
-NVLink 4.0:    ~450 GB/s 双向 (H100)
+NVLink 4.0:    ~900 GB/s 双向 (H100；每方向约 450 GB/s)
 
 即使使用 NVLink，与 DRAM 带宽 (TB/s 级) 相比仍有差距。
 

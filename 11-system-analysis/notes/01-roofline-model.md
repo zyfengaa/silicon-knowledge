@@ -99,7 +99,7 @@ Achievable = 200 × 0.167 = 33.4 GFLOPS = Peak GFLOPS 的 3.3%
 
 ```
 DGEMM (C = A × B):
-- 计算: 2 × N³ = 2 × 1024³ ≈ 2.15 GFLOPS (FP64)
+- 计算: 2 × N³ = 2 × 1024³ ≈ 2.15 GFLOP (FP64)
 - 访存:
   - A: N² = 1M 个元素 × 8B = 8MB (如果全部从 DRAM 读)
   - B: N² = 1M 个元素 × 8B = 8MB
@@ -127,10 +127,10 @@ Achievable ≈ Peak GFLOPS (如果有足够的子块重复利用缓存)
 ### 4.2 绘制步骤
 
 ```
-1. 画 X 轴 (AI, log scale, 0.1 → 100)
+1. 画 X 轴 (AI, log scale, 0.1 → 至少覆盖 ridge point 的 1.5 倍)
 2. 画 Y 轴 (GFLOPS, log scale, 1 → peak)
 3. 画水平线 y = Peak GFLOPS (计算天花板)
-4. 画斜线 y = Peak BW × AI (内存天花板，从左上到右下)
+4. 画斜线 y = Peak BW × AI (内存天花板，从原点向右上)
 5. 标记 Ridge Point 的 AI 值
 6. 在图上标注实际程序 (计算其 AI, 测量其性能)
 ```
@@ -185,8 +185,10 @@ Stencil:               ★  (0.25-0.5)
 SpMV:                    ★  (0.5-1)
 FFT (大):                  ★  (1-3)
 DGEMM (优化):                  ★  ★  (10-50)
-DGEMM (理论极限):                ★  ★  ★  (~1000)
+DGEMM (N≈12,000, FP64):              ★  ★  ★  (~1000)
 ```
+
+> 注意：~1000 FLOP/Byte 不是一个固定的“DGEMM 理论极限”。若只计算 DRAM 流量，FP64 DGEMM 的 AI ≈ N/12，FP32 ≈ N/6。N=1024 时 FP64 AI≈85、FP32≈171；要达到 ~1000，FP64 需要 N≈12,000，FP32 需要 N≈6,000。实际 AI 还取决于分块和缓存命中。
 
 ---
 
@@ -202,7 +204,7 @@ DGEMM (理论极限):                ★  ★  ★  (~1000)
 天花板 3: L1 bandwidth   → 如果数据在 L1 中
 ```
 
-实际上只需要画**最慢的（DRAM）天花板**，因为它是全局瓶颈。
+实际上不能只画最慢的 DRAM 天花板：如果数据已经在 L1/L2 中，DRAM 线会严重低估可达性能。分层 Roofline 应分别画出 L1、L2、DRAM 的天花板，程序的实际上限由它当前命中层次对应的那条线决定。
 
 ### 6.2 可达到的 Roofline
 
@@ -233,9 +235,9 @@ Theoretical Peak GFLOPS → (× 实践系数) → Achievable Peak GFLOPS
 
 ## 参考文献
 
-1. Williams, S., Waterman, A., & Patterson, D. (2009). "Roofline: An Insightful Visual Performance Model for Floating-Point Programs and Multicore Architectures." *Communications of the ACM*, 52(4).
+1. Williams, S., Waterman, A., & Patterson, D. (2009). "Roofline: An Insightful Visual Performance Model for Multicore Architectures." *Communications of the ACM*, 52(4), 65-76.
 2. Lo, Y. J., et al. (2014). "Roofline Model Toolkit: A Practical Tool for Architecture and Program Analysis." *Workshop on Performance Modeling*.
 3. Intel. (2022). "Intel Advisor Roofline Analysis." *Intel Advisor User Guide*.
 4. NVIDIA. (2022). "Nsight Compute Roofline Analysis." *Nsight Compute Documentation*.
-5. Doerfert, J., et al. (2022). "The Roofline Model: A Comprehensive Review." *arXiv:2206.11997*.
+5. Ofenbeck, G., et al. (2014). "Applying the Roofline Model." *IEEE ISPASS 2014*.
 6. Hennessy, J. L., & Patterson, D. A. (2019). *Computer Architecture: A Quantitative Approach* (6th ed.). Morgan Kaufmann.

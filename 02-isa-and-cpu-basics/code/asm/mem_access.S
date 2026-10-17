@@ -6,24 +6,32 @@
 #
 # RISC-V memory addressing modes:
 #   1. Base + offset (register + immediate)  -- lw/sw rd, offset(rs1)
-#   2. Register indirect (register + 0)      -- lw/sw rd, 0(rs1)
+#   2. Register indirect (base + offset with imm = 0) -- lw/sw rd, 0(rs1)
 #   3. PC-relative (for branches/jumps)      -- beq/jal
-#   4. Immediate (for lui/auipc + addi)      -- load address into register
+#   4. Address construction (lui/auipc + addi) -- form an address in a register
 #
 # NOTE: RISC-V does NOT have pre/post-increment, scaled index,
 # or absolute addressing modes. Complex addresses must be
 # computed explicitly with add/mul instructions.
+#
+# The test harness at the bottom uses Linux user-space ecalls
+# (a7 = 64 for write, a7 = 93 for exit). On a bare-metal target
+# these must be replaced by the platform's own I/O routines.
 
 .section .data
 .align 4
 
 # Define some test data in memory
+guard_word:
+    .word 0xDEADBEEF           # sentinel before the array (for the -4 offset test)
 array_data:
     .word 10, 20, 30, 40, 50, 60, 70, 80, 90, 100
 array_end:
 
 msg_ok:     .string "Memory access tests passed.\n"
+msg_ok_end:
 msg_fail:   .string "Memory access test FAILED.\n"
+msg_fail_end:
 
 .section .text
 .globl main
@@ -51,8 +59,8 @@ base_plus_offset_example:
     # Base + offset: load element at index 2 (offset 8)
     lw   t3, 8(t0)              # t3 = Mem[t0 + 8]  = array[2] = 30
 
-    # Negative offset: load from address before the base
-    lw   t4, -4(t0)             # t4 = Mem[t0 - 4]  (whatever is before array)
+    # Negative offset: load from the guard word placed just before the array
+    lw   t4, -4(t0)             # t4 = Mem[t0 - 4] = guard_word = 0xDEADBEEF
 
     # Store with base + offset: modify array[0]
     addi t1, x0, 99             # t1 = 99
@@ -208,6 +216,10 @@ stack_access_example:
     lw   t4, 4(sp)              # t4 = 200
     lw   t5, 8(sp)              # t5 = 300
 
+    # Deallocate stack space before the verification branches, so that
+    # test_failed/test_done always sees main's original sp.
+    addi sp, sp, 32             # sp += 32 (deallocate)
+
     # Verify
     addi t6, x0, 100
     bne  t3, t6, test_failed
@@ -215,9 +227,6 @@ stack_access_example:
     bne  t4, t6, test_failed
     addi t6, x0, 300
     bne  t5, t6, test_failed
-
-    # Deallocate stack space
-    addi sp, sp, 32             # sp += 32 (deallocate)
 
     jalr x0, ra, 0
 
@@ -275,12 +284,27 @@ main:
     j    test_passed
 
 test_failed:
+    # write(1, msg_fail, len) then exit(1) -- Linux ecall ABI
+    li   a0, 1
+    la   a1, msg_fail
+    li   a2, msg_fail_end - msg_fail
+    li   a7, 64                 # syscall: write
+    ecall
+    li   a0, 1                  # exit status 1
     j    test_done
 
 test_passed:
+    # write(1, msg_ok, len) then exit(0)
+    li   a0, 1
+    la   a1, msg_ok
+    li   a2, msg_ok_end - msg_ok
+    li   a7, 64                 # syscall: write
+    ecall
+    li   a0, 0                  # exit status 0
     j    test_done
 
 test_done:
     lw   ra, 12(sp)
     addi sp, sp, 16
-    jalr x0, ra, 0
+    li   a7, 93                 # syscall: exit
+    ecall

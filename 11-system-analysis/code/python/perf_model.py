@@ -149,9 +149,11 @@ def demo(model: RooflineModel) -> None:
         ("SpMV (CSR, FP32)", 0.8),
         ("FFT (large, FP32)", 2.0),
         ("Conv (ResNet, FP16 TC)", 8.0),
-        ("MatMul 1024 (FP32)", 60.0),
-        ("MatMul 4096 (BF16 TC)", 180.0),
-        ("MatMul 8192 (FP16 TC)", 341.0),
+        # MatMul 的理论 AI 用 matmul_ai() 计算，避免手工值与公式不一致。
+        # 这里只计 DRAM 流量，不考虑 cache/tiling；实际 AI 通常更高。
+        ("MatMul 1024 (FP32)", matmul_ai(1024, 1024, 1024, 4)),
+        ("MatMul 4096 (BF16 TC)", matmul_ai(4096, 4096, 4096, 2)),
+        ("MatMul 8192 (FP16 TC)", matmul_ai(8192, 8192, 8192, 2)),
     ]
 
     for name, ai in examples:

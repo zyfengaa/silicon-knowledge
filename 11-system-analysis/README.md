@@ -10,7 +10,7 @@
 |------|------|---------|
 | 01 | **Roofline 模型** | 如何判断程序是 compute-bound 还是 memory-bound |
 | 02 | **Amdahl vs Gustafson** | 并行加速的理论上限分析 |
-| 03 | **功耗与散熱** | TDP、DVFS、暗硅（Dark Silicon）、异构设计 |
+| 03 | **功耗与散热** | TDP、DVFS、暗硅（Dark Silicon）、异构设计 |
 | 04 | **异构计算系统** | CPU + GPU + NPU 协同工作的系统设计 |
 | 05 | **Linux perf** | CPU 性能计数器采样、火焰图生成 |
 | 06 | **GPU Profiling** | Nsight Compute / Nsight Systems / rocprof 实操指南 |

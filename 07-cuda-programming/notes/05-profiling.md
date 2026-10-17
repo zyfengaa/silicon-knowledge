@@ -111,9 +111,12 @@ ncu --kernel-name "vec_add" --set full -o vec_report ./my_cuda_app
 # 简短分析（快速检查）
 ncu --set basic -o quick_report ./my_cuda_app
 
-# 逐行分析（需要编译时加 -lineinfo）
+# 逐行分析（需要编译时加 -lineinfo 或 -G）
 nvcc -lineinfo -o myapp myapp.cu
-ncu --set full --source-include ./myapp
+ncu --set full -o myapp_report ./myapp
+# 用 Nsight Compute UI 打开 myapp_report.ncu-rep 查看 Source 页；
+# 或命令行：ncu --import myapp_report.ncu-rep --page source
+# 说明：--source-include 并非 ncu 的文档化选项，不要使用。
 ```
 
 ### 分析关键指标
@@ -234,7 +237,7 @@ ncu --kernel-name "matmul_kernel" --set full -o matmul_report ./myapp
 
 | 发现问题 | 优化方法 |
 |----------|----------|
-| 计算受限 | 使用更快的数学函数（__fmaf），减少冗余计算 |
+| 计算受限 | 使用更快的数学函数（如 `fmaf`、`__fmaf_rn`），减少冗余计算 |
 | 内存受限 | 使用 Shared Memory，确保 Coalesced Access |
 | Occupancy 低 | 调整 Block Size，减少寄存器/共享内存 |
 | Warp Divergence | 重构分支逻辑，使用 Warp 级函数 |

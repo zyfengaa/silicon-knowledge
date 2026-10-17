@@ -68,17 +68,17 @@ Five exception types: invalid operation, division by zero, overflow, underflow, 
 
 ## Impact
 
-- **Adopted universally**: Intel 8087 (1980), Motorola 68881 (1984), then SPARC, MIPS, ARM, POWER, GPUs.
+- **Adopted universally**: Intel 8087 (1980, a pre-standard implementation of the draft), Motorola 68881 (1984), then SPARC, MIPS, ARM, POWER, GPUs.
 - **Portability**: Same simulation produces identical results across architectures.
 - **Algorithm design**: Guaranteed contract enables reasoning about error bounds.
-- **Hardware specialization**: Dedicated FPUs drove 1000x performance improvement.
+- **Hardware specialization**: Dedicated FPUs brought large performance and energy-efficiency gains for floating-point workloads.
 
 ### Limitations
 
-- FMA optional in 1985, mandated in 2008.
+- FMA was not defined in 1985; IEEE 754-2008 lists it as a recommended operation, not a requirement.
 - Decimal arithmetic (2008) has limited hardware support.
 - ML workloads (bfloat16, FP8) push outside the standard.
-- Full compliance is hundreds of pages, challenging for implementers.
+- The standard itself is about 84 pages, but full compliance still requires careful handling of rounding, exceptions, and special values.
 
 ---
 
@@ -110,4 +110,4 @@ Overall: IEEE 754 is one of the unsung pillars of modern computing, enabling eve
 
 4. Intel Corporation. (1994). FDIV Replacement Program. *Intel White Paper*.
 
-5. Patterson, D. A., & Hennessy, J. L. (2017). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Chapter 3: Arithmetic for Computers.
+5. Patterson, D. A., & Hennessy, J. L. (2013). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Chapter 3: Arithmetic for Computers.

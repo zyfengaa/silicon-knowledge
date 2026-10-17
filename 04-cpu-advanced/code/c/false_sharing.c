@@ -14,7 +14,13 @@
  * cache-line bouncing induced by false sharing.
  *
  * Compile:
- *   gcc -O2 -lpthread -o false_sharing false_sharing.c
+ *   gcc -O2 -o false_sharing false_sharing.c -lpthread
+ *
+ * Note: -lpthread must come after the source/object that uses it.
+ *
+ * Note: this assumes a 64-byte cache line (typical on x86).  Apple
+ * Silicon uses 128-byte cache lines, so on those machines the "padded"
+ * layout can still false-share unless the padding is 128 bytes.
  *
  * Run:
  *   ./false_sharing
@@ -25,23 +31,30 @@
 #include <pthread.h>
 #include <time.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #define ITERATIONS  (10 * 1000 * 1000)   /* 10 million per thread */
 
 /* ---- Shared counters (will be allocated dynamically) ---- */
 
-struct shared_false {
+struct __attribute__((aligned(64))) shared_false {
     volatile unsigned long long counter0;
     volatile unsigned long long counter1;
-    /* Both counters sit on the same cache line (likely). */
+    /* Both counters sit on the same cache line. */
 };
+_Static_assert(offsetof(struct shared_false, counter1) < 64,
+               "counters should share a cache line");
 
-struct shared_padded {
+struct __attribute__((aligned(64))) shared_padded {
     volatile unsigned long long counter0;
     char pad0[64 - sizeof(unsigned long long)];   /* fill rest of line */
     volatile unsigned long long counter1;
     char pad1[64 - sizeof(unsigned long long)];
 };
+_Static_assert(offsetof(struct shared_padded, counter1) == 64,
+               "counter1 should start on the next cache line");
+_Static_assert(sizeof(struct shared_padded) % 64 == 0,
+               "padded struct should span whole cache lines");
 
 /* ---- Thread routines ---- */
 
@@ -108,16 +121,23 @@ main(void)
      * Both counters are adjacent in a small struct.
      */
     struct shared_false *sf = (struct shared_false *)
-        aligned_alloc(64, sizeof(struct shared_false));
+        aligned_alloc(64, 64);   /* C11: size must be a multiple of alignment */
     if (!sf) { perror("aligned_alloc"); return EXIT_FAILURE; }
     sf->counter0 = 0;
     sf->counter1 = 0;
 
     clock_gettime(CLOCK_MONOTONIC, &t1m);
-    pthread_create(&t0, NULL, thread_inc_false,  sf);
-    pthread_create(&t1, NULL, thread_inc_false2, sf);
-    pthread_join(t0, NULL);
-    pthread_join(t1, NULL);
+    if (pthread_create(&t0, NULL, thread_inc_false, sf) != 0 ||
+        pthread_create(&t1, NULL, thread_inc_false2, sf) != 0) {
+        perror("pthread_create");
+        free(sf);
+        return EXIT_FAILURE;
+    }
+    if (pthread_join(t0, NULL) != 0 || pthread_join(t1, NULL) != 0) {
+        perror("pthread_join");
+        free(sf);
+        return EXIT_FAILURE;
+    }
     clock_gettime(CLOCK_MONOTONIC, &t2m);
     elapsed_false = time_diff_ns(&t1m, &t2m);
 
@@ -139,10 +159,17 @@ main(void)
     sp->counter1 = 0;
 
     clock_gettime(CLOCK_MONOTONIC, &t1m);
-    pthread_create(&t0, NULL, thread_inc_padded,  sp);
-    pthread_create(&t1, NULL, thread_inc_padded2, sp);
-    pthread_join(t0, NULL);
-    pthread_join(t1, NULL);
+    if (pthread_create(&t0, NULL, thread_inc_padded, sp) != 0 ||
+        pthread_create(&t1, NULL, thread_inc_padded2, sp) != 0) {
+        perror("pthread_create");
+        free(sp);
+        return EXIT_FAILURE;
+    }
+    if (pthread_join(t0, NULL) != 0 || pthread_join(t1, NULL) != 0) {
+        perror("pthread_join");
+        free(sp);
+        return EXIT_FAILURE;
+    }
     clock_gettime(CLOCK_MONOTONIC, &t2m);
     elapsed_nofalse = time_diff_ns(&t1m, &t2m);
 
@@ -168,6 +195,7 @@ main(void)
  *     A Quantitative Approach", 6th Edition, Chapter 5 (Multiprocessors).
  *   - Bolosky, W. J. & Scott, M. L. "False Sharing and Its Effect on
  *     Shared Memory Performance." USENIX SEDMS, 1993.
- *   - Papamarcos, M. S. & Patel, J. H. "A New Cache Coherence Scheme
- *     for Shared-Memory Multiprocessors." ISCA, 1984.
+ *   - Papamarcos, M. S. & Patel, J. H. "A Low-Overhead Coherence
+ *     Solution for Multiprocessors with Private Cache Memories."
+ *     ISCA, 1984.
  */

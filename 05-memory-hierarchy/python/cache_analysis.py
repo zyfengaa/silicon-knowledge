@@ -8,15 +8,16 @@ gracefully before performance degrades (thrashing).
 Model:
   - Cache size: 32 KB, line size: 64 B.
   - For each working set size and associativity, the hit rate is
-    estimated via an analytical model that captures:
+    estimated via a simple analytical (logistic-family) model:
       * Working sets that fit in cache enjoy near-100 % hit rates.
-      * As the working set exceeds capacity, conflict misses degrade
-        performance.
-      * Higher associativity (more ways per set) reduces conflict
-        misses, shifting the degradation to larger working sets.
-  - The curves use characteristic shapes derived from cache theory;
-    they are not from a per-access cycle-accurate simulation but rather
-    a parametric model fitted to typical miss-rate curves.
+      * As the working set exceeds capacity, the hit rate falls.
+      * Higher associativity is modelled as a modest increase in
+        effective capacity.
+  - This is an illustrative parametric model, NOT a trace-driven or
+    cycle-accurate simulation.  The associativity factor is a heuristic
+    (1-way = 1.0, 2-way ~1.3, 4-way ~1.6, 8-way ~1.9), not a measurement.
+    For a trace-driven experiment that actually exhibits conflict misses,
+    see code/python/cache_analysis.py.
 
 Dependencies: matplotlib, numpy
 Run:
@@ -33,16 +34,20 @@ Reference:
   IEEE Trans. Computers, 1989.
 """
 
-import matplotlib
 import os
+import sys
+
+try:
+    import matplotlib
+    import numpy as np
+except ImportError:
+    sys.exit("缺少 numpy/matplotlib，请先安装：pip install numpy matplotlib")
 
 # Use non-interactive Agg backend when no display is available
 if not os.environ.get('DISPLAY'):
     matplotlib.use('Agg')
 
-import numpy as np
 import matplotlib.pyplot as plt
-import os
 
 # ================================================================
 # Cache parameters
@@ -71,15 +76,15 @@ def hit_rate_analytical(ws_size, assoc, cache_size=CACHE_SIZE):
 
     The model is a logistic-family curve whose inflection point
     (the working-set size where hit rate drops to 50 %) shifts
-    rightward with higher associativity.  This captures the key
-    trade-off: more ways reduce conflict misses, letting the cache
-    handle larger working sets before thrashing.
+    rightward with higher associativity.  This captures, qualitatively,
+    the key trade-off: more ways reduce conflict misses, letting the cache
+    handle larger working sets before thrashing.  It is a heuristic
+    illustration, not a measured trace.
 
     The base inflection point is at ws_size == cache_size for a
     direct-mapped (1-way) cache.  Higher associativity multiplies
-    the effective capacity by a small factor derived from the
-    observation that N-way associative caches typically see ~30-50 %
-    fewer misses than direct-mapped at the same capacity.
+    the effective capacity by a heuristic factor (see below); this
+    factor is chosen for illustration and is not fitted to measurements.
     """
     ratio = ws_size / cache_size
 
@@ -109,8 +114,8 @@ def hit_rate_analytical(ws_size, assoc, cache_size=CACHE_SIZE):
 def main():
     print("=== Cache Performance: Hit Rate vs Working Set Size ===\n")
     print(f"  Cache: {CACHE_SIZE // 1024} KB, Line: {LINE_SIZE} B")
-    print(f"  Model: analytical (logistic-family per associativity)")
-    print(f"  Shows: higher associativity extends effective cache capacity\n")
+    print(f"  Model: illustrative parametric (logistic-family), not a trace simulation")
+    print(f"  Assumption: higher associativity extends effective capacity\n")
 
     # Compute data for each associativity
     results = {}

@@ -120,9 +120,9 @@ AB 00  | 1 | 1 | 0 | 1 |
    10  | 1 | 1 | 0 | 1 |
 ```
 
-**b)** 质蕴含项：A'C' (m0,m1,m4,m5), B'D' (m0,m2,m8,m10), AB'C' (m8,m9)
+**b)** 质蕴含项：A'B' (m0,m1,m4,m5), A'C' (m0,m1,m4,m5), B'C' (m0,m1,m8,m9), B'D' (m0,m2,m8,m10)
 
-**c)** 最简与或式：**F = A'C' + B'D' + AB'C'**
+**c)** 最简与或式：**F = A'C' + B'C' + B'D'**（或等价的 A'B' + B'C' + B'D'，均为 6 个文字）
 
 ### 答案 6：加法器设计
 
@@ -141,7 +141,7 @@ A B Cin | Sum Cout
 
 **b)** Sum = A XOR B XOR Cin。Cout = (A.B) + (B.Cin) + (A.Cin)
 
-**c)** CLA 使用 G_i = A_i.B_i 和 P_i = A_i XOR B_i 并行计算进位。C_{i+1} = G_i + P_i.C_i。所有进位可在常数时间（2 级 AND-OR）内得到，与 N 无关。
+**c)** CLA 使用 G_i = A_i.B_i 和 P_i = A_i XOR B_i 并行计算进位。C_{i+1} = G_i + P_i.C_i。在理想的两级 AND-OR 模型中可视为常数时间；实际门电路扇入有限，CLA 需要前缀树结构，延迟为 O(log N)。
 
 **d)** C2 = G1 + P1.G0 + P1.P0.C0
 
@@ -157,7 +157,7 @@ A B Cin | Sum Cout
 
 ### 答案 8：算术电路
 
-**a)** Booth 算法：M=0110, 乘数=0101。+M(0110), -M(1010)<<1, +M(0110)<<2。和 = 0110 + 10100 + 011000 = 0011110 = **30**
+**a)** Booth 算法：M=0110, 乘数=0101。位对为 (1,0)→-M、(0,1)→+M<<1、(1,0)→-M<<2、(0,1)→+M<<3。和 = -6 + 12 - 24 + 48 = **30**。
 
 **b)** Wallace 树：延迟为 O(log N)，而阵列乘法器为 O(N)。连线更多，但对于大型乘法器速度更快。
 
@@ -167,7 +167,7 @@ A B Cin | Sum Cout
 
 ## 参考文献（References）
 
-1. Patterson, D. A., & Hennessy, J. L. (2017). *Computer Organization and Design* (第 5 版). Morgan Kaufmann.
+1. Patterson, D. A., & Hennessy, J. L. (2013). *Computer Organization and Design* (第 5 版). Morgan Kaufmann.
 2. Mano, M. M., & Ciletti, M. D. (2018). *Digital Design* (第 6 版). Pearson.
 3. Harris, S., & Harris, D. (2015). *Digital Design and Computer Architecture* (第 2 版). Morgan Kaufmann.
 4. IEEE Standard for Floating-Point Arithmetic. (2019). *IEEE Std 754-2019*.

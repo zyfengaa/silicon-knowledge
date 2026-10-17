@@ -83,18 +83,23 @@ class Saturating2Bit:
 #  Simulation
 # -----------------------------------------------------------------------
 
-def simulate(predictor, history: str) -> tuple[int, int]:
+def simulate(predictor, history: str, pc: int = 0) -> tuple[int, int]:
     """
     Run the predictor against the full history string.
+
+    The history string describes the outcomes of *one* static branch
+    over time, so every access uses the same PC.  Using the loop index
+    as a pseudo-PC would give each access its own table entry and turn
+    the 2-bit predictor into Always-Not-Taken.
 
     Returns (correct_count, total_count).
     """
     correct = 0
-    for idx, actual in enumerate(history):
-        pred = predictor.predict(idx)        # use index as pseudo-PC
+    for actual in history:
+        pred = predictor.predict(pc)
         if pred == actual:
             correct += 1
-        predictor.update(idx, actual)
+        predictor.update(pc, actual)
     return correct, len(history)
 
 

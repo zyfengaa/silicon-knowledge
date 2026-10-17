@@ -52,7 +52,7 @@ DRAM 的存储阵列组织为**行（Row）**和**列（Column）**：
 
 ### Bank 与 Rank
 
-为了增加并发，DRAM 芯片内部划分为多个独立的 **Bank**（通常 8 或 16 个）。不同 Bank 可以并行激活行和读写数据。
+为了增加并发，DRAM 芯片内部划分为多个独立的 **Bank**（DDR3 通常 8 个，DDR4 通常 16 个，DDR5 为 32 个 = 8 个 Bank Group × 4 Bank）。不同 Bank 可以并行激活行和读写数据。
 
 多个 DRAM 芯片并联组成一个 **Rank**（64 位数据位宽）。DIMM（Dual Inline Memory Module）可以包含多个 Rank。
 
@@ -72,7 +72,7 @@ DDR SDRAM 在时钟的**上升沿和下降沿**都传输数据，因此理论带
 | DDR2 | 200–533 | 400–1066 | 3.2–8.5 | 1.8 | 2003 |
 | DDR3 | 400–1066 | 800–2133 | 6.4–17.0 | 1.5 | 2007 |
 | DDR4 | 800–1600 | 1600–3200 | 12.8–25.6 | 1.2 | 2014 |
-| DDR5 | 1600–2800 | 3200–5600 | 25.6–44.8 | 1.1 | 2021 |
+| DDR5 | 1600–3200 | 3200–6400 | 25.6–51.2 | 1.1 | 2021 |
 
 ### DDR4 与 DDR5 详细对比
 
@@ -86,10 +86,10 @@ DDR SDRAM 在时钟的**上升沿和下降沿**都传输数据，因此理论带
 | Prefetch | 8n | 16n |
 | ECC | 芯片级 (可选) | 片内 ECC (On-Die ECC, 标准) |
 | 命令接口 | 单通道 | **双 32-bit 子通道** |
-| 训练 | 启动时训练 | 全时训练 (实时反馈均衡) |
+| 训练 | 启动时训练 | 启动时训练 + 运行期周期性训练/均衡（具体实现依厂商与速率而定） |
 
 **DDR5 的关键改进**：
-1. **更高的密度**：3DS 堆叠技术可实现 64 Gb 芯片
+1. **更高的密度**：主流 DDR5 Die 密度为 16/24/32 Gb；3DS 堆叠通过增加堆叠层数提升单颗封装容量，而不是把单 Die 密度提高到 64 Gb
 2. **更高的带宽**：更高速率，加上双 32-bit 子通道提升了总带宽利用率
 3. **片内 ECC**：内部使用部分存储单元作为 ECC，提高了良率和可靠性
 4. **双通道**：每个 DIMM 内部有两个独立的 32-bit 子通道，可以同时服务两个请求
@@ -126,7 +126,7 @@ DRAM 控制器（集成在 CPU 或 SoC 中）负责：
 
 ## 参考文献
 
-- Jacob, B. et al., *Memory Systems: Cache, DRAM, Disk*, Morgan Kaufmann, 2008. Chapter 7: DRAM.
+- Jacob, B. et al., *Memory Systems: Cache, DRAM, Disk*, Morgan Kaufmann, 2007. Chapter 7: DRAM.
 - Hennessy, J. L. & Patterson, D. A., *Computer Architecture: A Quantitative Approach*, 6th ed., Section 2.4: Main Memory.
 - JEDEC Standard JESD79-4C: DDR4 SDRAM Specification.
 - JEDEC Standard JESD79-5: DDR5 SDRAM Specification.

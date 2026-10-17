@@ -92,7 +92,7 @@ $ perf stat ./matmul_1024
 - 存在频繁的分支预测错误
 - 优化方向：减少数据依赖、提高指令级并行、向量化
 
-**高分文误预测率（> 5%）**：
+**高分支误预测率（> 5%）**：
 - 循环中存在难以预测的条件分支
 - 优化方向：分支消除（使用谓词指令）、避免数据驱动的分支模式
 
@@ -106,8 +106,11 @@ $ perf stat ./matmul_1024
 # 以 99 Hz 的频率对 CPU 周期采样
 perf record -F 99 ./my_program
 
-# 对特定事件采样（如缓存未命中）
+# 对 LLC 未命中采样（`cache-misses` 默认统计最后一级缓存）
 perf record -e cache-misses -F 99 ./my_program
+
+# 若要看 L1 数据缓存未命中，使用 L1-dcache-load-misses
+perf stat -e L1-dcache-load-misses,L1-dcache-loads ./my_program
 
 # 生成调用链
 perf record -F 99 --call-graph dwarf ./my_program
@@ -202,7 +205,7 @@ perf script > out.perf
 
 1. **看顶层**：最顶层是 CPU 实际执行代码的函数。宽矩形说明该函数消耗了大量 CPU 时间。
 2. **看"山峰"**：如果火焰图看起来像"平顶山"（顶部很宽），说明程序的主要时间花在少数几个函数中。
-3. **看颜色**（可选约定）：红色表示内核态、橙色表示用户态、黄色/绿色表示 I/O 等待等。
+3. **看颜色**：火焰图的颜色**不编码内核态/用户态**。`flamegraph.pl` 默认按函数名做哈希配色，颜色只用于区分相邻帧；如果使用 `--color=pid`、`--color=java` 等参数，颜色含义由该参数决定，应以脚本说明为准。
 4. **看"烟囱"**：垂直方向高大的调用链可能暗示有深层嵌套调用的开销。
 
 ## 实际案例：矩阵乘法优化
@@ -228,7 +231,7 @@ perf stat ./naive_matmul 1024
 
 输出特征：
 - IPC ≈ 0.5-0.8（远低于 1.0）
-- L1 cache-misses 非常高（因为 B 的列访问不连续）
+- L1-dcache-load-misses 非常高（用 `perf stat -e L1-dcache-load-misses,L1-dcache-loads` 查看；`cache-misses` 默认是 LLC，不是 L1）
 - 缓存未命中率达到 40-60%
 
 ### 步骤 2：循环交换优化

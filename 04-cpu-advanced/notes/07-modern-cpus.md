@@ -19,7 +19,7 @@
 
 | 参数 | M1 Firestorm | M2 Avalanche | M3/M4 改进 |
 |------|-------------|-------------|------------|
-| 发射宽度（Decode） | 8-wide | 8-wide | 9-wide (M4) |
+| 发射宽度（Decode） | 8-wide | 8-wide | 9-wide (M3) / 10-wide (M4) |
 | ROB 条目 | ~630 | ~630+ | ~650+ |
 | 整数 ALU | 6 | 6 | 6~8 |
 | 浮点/SIMD 单元 | 3 | 3 | 4 |
@@ -78,7 +78,7 @@ Golden Cove 是 Intel 第 12 代酷睿（Alder Lake）的性能核心，首次�
 | 微操作（uop）缓存 | 4K 条目 |
 | ROB 条目 | 512 |
 | 整数物理寄存器 | 280 |
-| 浮点物理寄存器 | 224 |
+| 浮点物理寄存器 | 332 |
 | 整数 ALU | 5 |
 | 加载单元 | 3 |
 | 存储单元 | 2 |
@@ -126,10 +126,11 @@ AMD Zen 系列使用芯片化（Chiplet）设计：
 │                                                     │
 │  ┌─────────────────┐     ┌─────────────────┐        │
 │  │  CCD 0 (Zen 4)  │     │  CCD 1 (Zen 4)  │        │
-│  │ ┌─────┐ ┌─────┐ │     │ ┌─────┐ ┌─────┐ │        │
-│  │ │ CCX │ │ CCX │ │     │ │ CCX │ │ CCX │ │        │
-│  │ │0-3  │ │4-7  │ │     │ │0-3  │ │4-7  │ │        │
-│  │ └─────┘ └─────┘ │     │ └─────┘ └─────┘ │        │
+│  │ ┌─────────────┐ │     │ ┌─────────────┐ │        │
+│  │ │ 1 个 CCX    │ │     │ │ 1 个 CCX    │ │        │
+│  │ │ 8 核 + 32MB │ │     │ │ 8 核 + 32MB │ │        │
+│  │ │ 共享 L3     │ │     │ │ 共享 L3     │ │        │
+│  │ └─────────────┘ │     │ └─────────────┘ │        │
 │  └────────┬────────┘     └────────┬────────┘        │
 │           │                      │                  │
 │           └──────────┬───────────┘                  │
@@ -147,6 +148,8 @@ AMD Zen 系列使用芯片化（Chiplet）设计：
 └─────────────────────────────────────────────────────┘
 ```
 
+> 注：Zen 3 及更早的 CCD 通常包含两个 4 核 CCX；Zen 4 将每个 CCD 合并为单个 8 核 CCX，并共享 32MB L3。Zen 5 的部分产品又回到更细的 CCX 划分，具体随型号而变。
+
 | 术语 | 说明 |
 |------|------|
 | **CCD** (Core Complex Die) | 计算芯片，含多个 CCX |
@@ -158,9 +161,9 @@ AMD Zen 系列使用芯片化（Chiplet）设计：
 
 | 参数 | 值 |
 |------|-----|
-| 发射宽度（Front-end） | 8-wide (decode) + 6-wide (dispatch) |
+| 发射宽度（Front-end） | 4-wide (decode) + 6-wide (dispatch) |
 | ROB 条目 | 320 |
-| 整数物理寄存器 | 256 |
+| 整数物理寄存器 | 未公开 |
 | 整数 ALU | 6 |
 | 加载单元 | 3 |
 | 存储单元 | 2 |
@@ -168,16 +171,16 @@ AMD Zen 系列使用芯片化（Chiplet）设计：
 | L1 指令缓存 | 32KB (8-way) |
 | L1 数据缓存 | 32KB (8-way) |
 | L2 缓存（每核） | 1MB (8-way) |
-| L3 缓存（每 CCX 共享） | 16MB (16-way) |
-| 分支预测 | TAGE-like + 神经网络辅助 |
-| BTB 条目 | 8,192 (L1) + 32K (L2) |
+| L3 缓存（每 CCD / CCX 共享） | 32MB (16-way) |
+| 分支预测 | TAGE/感知机类（厂商未公开具体结构） |
+| BTB 条目 | 1,536 (L1) + 7,680 (L2) |
 | RAS 深度 | 32 |
 
 **Zen 4 的亮点**：
 
-- **8-wide front-end**：与 Apple 的 Firestorm 同一水平
+- **4-wide decode + 6-wide dispatch**：解码宽度不算宽，主要依靠 op cache 和分派宽度维持吞吐
 - **首次支持 AVX-512**（256-bit 实现，双泵送实现 512-bit 操作）
-- **巨大的 BTB（L1 8K + L2 32K）**：分支预测效果卓越
+- **较大的 BTB（L1 1,536 + L2 7,680）**：配合 TAGE 类预测器
 - **L2 缓存增大到 1MB**（Zen 3 为 512KB）
 - **IPC 提升 ≈ 13%**（对比 Zen 3）
 
@@ -189,13 +192,13 @@ AMD Zen 系列使用芯片化（Chiplet）设计：
 | 分支预测 | 新的专用取指预测结构 |
 | 调度器 | 增加调度窗口，提升乱序能力 |
 | 浮点 | 改进的浮点流水线 |
-| AI 加速 | 集成 AI 推理加速指令 |
+| AI 加速 | 增加 AVX-512 VNNI、BF16 等面向推理的指令扩展 |
 
 ## 架构对比表
 
 | 参数 | Apple M1 Firestorm | Intel Golden Cove | AMD Zen 4 |
 |------|-------------------|-------------------|-----------|
-| 发射宽度 (Decode) | 8-wide | 6-wide | 8-wide |
+| 发射宽度 (Decode) | 8-wide | 6-wide | 4-wide (dispatch 6-wide) |
 | ROB 条目 | ~630 | 512 | 320 |
 | 整数 ALU | 6 | 5 | 6 |
 | 加载/存储单元 | 3 load + 2 store | 3 load + 2 store | 3 load + 2 store |
@@ -204,8 +207,8 @@ AMD Zen 系列使用芯片化（Chiplet）设计：
 | L2 缓存 | 12MB (共享) | 1.25MB (每核) | 1MB (每核) |
 | 分支预测误代价 | ~12~15 | ~17~20 | ~14~16 |
 | 制程 | 5nm (TSMC N5) | Intel 7 (10nm+) | 5nm (TSMC N5) |
-| SIMD 支持 | NEON / SVE2 | AVX-512 (部分) | AVX-512 (256-bit) |
-| 主要优势 | 宽发射 + 巨大缓存 | 复杂预测 + AMX | 高频率 + 巨型 BTB |
+| SIMD 支持 | NEON（M4 另加 SME） | AVX2（Alder Lake 消费级禁用 AVX-512，且无 AMX） | AVX-512 (256-bit 数据通路) |
+| 主要优势 | 宽发射 + 巨大缓存 | 复杂预测 + 大 ROB | 大缓存 + AVX-512 |
 | 主要劣势 | 封闭生态 | 功耗较高 | 芯片互联延迟 |
 
 ## 设计哲学差异
@@ -222,7 +225,7 @@ AMD Zen 系列使用芯片化（Chiplet）设计：
 
 - **Apple Firestorm**：8-wide decode，~630 ROB，超大缓存，极佳能效
 - **Intel Golden Cove**：6-wide decode，512 ROB，复杂分支预测，混合架构
-- **AMD Zen 4**：8-wide front-end，320 ROB，CCD+IOD chiplet，AVX-512
+- **AMD Zen 4**：4-wide decode / 6-wide dispatch，320 ROB，CCD+IOD chiplet，AVX-512（256-bit 数据通路）
 - **异构计算**：P-core + E-core 已成为行业标准
 - **现代 CPU 的竞争焦点**：发射宽度、ROB 大小、分支预测、缓存层次结构
 
@@ -235,8 +238,6 @@ AMD Zen 系列使用芯片化（Chiplet）设计：
 
 ## 参考文献
 
-- Apple Inc. "Apple M1 Architecture Overview." *Apple CPU Whitepapers*, 2020.
-- Apple Inc. "Apple M3 Architecture Overview." *Apple Silicon Performance Analysis*, 2023.
 - Intel Corporation. *Intel 64 and IA-32 Architectures Optimization Reference Manual*, 2022.
 - Intel Corporation. "Alder Lake Architecture Overview." *Intel Technology Brief*, 2021.
 - AMD. "AMD Zen 4 Core Architecture." *AMD Whitepapers*, 2022.

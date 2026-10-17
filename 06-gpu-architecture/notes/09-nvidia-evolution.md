@@ -12,8 +12,8 @@
 |------|------|------|--------|---------|-------------|
 | Tesla | 2007 | 90nm | 0.68B | G80 | 0.35 |
 | Fermi | 2010 | 40nm | 3.0B | GF100 | 1.28 |
-| Kepler | 2012 | 28nm | 7.1B | GK104 | 4.5 |
-| Maxwell | 2014 | 28nm | 8.0B | GM204 | 6.2 |
+| Kepler | 2012 | 28nm | 7.1B | GK110 | 4.5 |
+| Maxwell | 2014 | 28nm | 8.0B | GM200 | 6.1 |
 | Pascal | 2016 | 16nm | 15.3B | GP100 | 10.6 |
 | Volta | 2017 | 12nm | 21.1B | GV100 | 15.7 |
 | Turing | 2018 | 12nm | 18.6B | TU102 | 16.3 |
@@ -55,7 +55,7 @@
 ### Kepler (GK104/GK110, 2012) —— 效率和并行度提升
 
 - **SMX**：新的 SM 设计，每个 SM 包含 192 个 CUDA Core
-- **Hyper-Q**：64 个硬件工作队列，允许多个 CPU 核心同时向 GPU 提交任务
+- **Hyper-Q**：32 个硬件工作队列，允许多个 CPU 核心同时向 GPU 提交任务
 - **动态并行（Dynamic Parallelism）**：GPU kernel 可以在 GPU 上启动子 kernel（递归式并行）
 - **改进的功耗效率**：动态时钟和电压管理
 - **Grid Management Unit (GMU)**：更灵活的工作调度
@@ -63,7 +63,7 @@
 ### Maxwell (GM204, 2014) —— 能效优化
 
 - **改进的 SM 设计 (SMM)**：将 SM 分为 4 个独立分区，每个分区 32 个 CUDA Core
-- **共享内存 + L1 分割**：共享内存和 L1 可独立配置（不再争用同一物理存储）
+- **统一的 L1/共享内存**：共享内存与 L1 缓存共用 96 KB 片上 SRAM，可按需划分容量
 - **三级缓存**：引入 unified L1/texture cache
 - **功耗大幅优化**：同性能下功耗仅为 Kepler 的 1/2
 - **深度学习的硬件准备**：FP16 存储支持
@@ -118,30 +118,32 @@
 - **Transformer Engine**：自动检测、切换 FP8/FP16 精度
 - **第四代 Tensor Core**：FP8 支持，TF32 改进
 - **DPX 指令**：加速动态规划（Floyd-Warshall、Smith-Waterman）
-- **Async Copy**：从全局内存到共享内存的硬件 DMA
+- **TMA（Tensor Memory Accelerator）**：多维张量的异步 DMA 传输（Ampere 先引入 cp.async，Hopper 将其扩展为 TMA）
 - **NVLink 4.0**：900 GB/s 双向
 - **NVSwitch 3.0**：全互联数据中心
-- **改进的 L2 缓存**：50 MB，partitioned into 24 segments
+- **改进的 L2 缓存**：50 MB，分为 2 个 25 MB 分区
 - **CUDA Graph 改善**：减少 kernel launch 开销
 
 | 规格 | H100 (GH100) |
 |------|--------------|
 | 晶体管数 | 80B |
 | SM 数量 | 132 |
-| Tensor Core / SM | 8 |
-| 总计 Tensor Core | 1,056 |
+| Tensor Core / SM | 4 |
+| 总计 Tensor Core | 528 |
 | FP8 TFLOPS | 1,979 |
 | L2 缓存 | 50 MB |
 | HBM3 带宽 | 3.35 TB/s |
 
 ### Blackwell (GB100, 2024) —— 新一代
 
-- **第五代 Tensor Core**：FP4、FP6、NF4 支持
+- **第五代 Tensor Core**：支持 FP4、FP6、FP8 等低精度格式
+  （NF4 是 QLoRA/bitsandbytes 使用的软件端 4-bit NormalFloat 格式，并非 Blackwell 的硬件数据类型）
 - **第二代 Transformer Engine**：更高精度灵活性
 - **NVLink 5.0**：1.8 TB/s 双向
 - **MIG 增强**：更多分区灵活性
-- **208B 晶体管**（TSMC 4NP）：GPU 历史上最复杂的芯片
-- **单个芯片集成两个 die**：通过 NVLink-C2C 互联
+- **208B 晶体管**（TSMC 4NP，双 die 封装）
+- **单个封装内集成两个 die**：通过 **NV-HBI**（10 TB/s die 间互联）连接，对外表现为一个 GPU
+  （NVLink-C2C 是 Grace CPU 与 GPU 之间的 900 GB/s 互联，不要与 die 间 NV-HBI 混淆）
 
 ---
 
@@ -151,14 +153,17 @@
 |------|-------|-------|--------|---------|--------|-------|--------|--------|--------|-----------|
 | 首发 | 2007 | 2010 | 2012 | 2014 | 2016 | 2017 | 2018 | 2020 | 2022 | 2024 |
 | 工艺 | 90nm | 40nm | 28nm | 28nm | 16nm | 12nm | 12nm | 7nm | 4N | 4NP |
-| 晶体管 | 0.68B | 3B | 7.1B | 8B | 15.3B | 21.1B | 18.6B | 54.2B | 80B | 208B |
-| SM | 16 | 16 | 16 | 16 | 60 | 84 | 72 | 108 | 132 | 168 |
+| 晶体管 | 0.68B | 3B | 7.1B | 8B | 15.3B | 21.1B | 18.6B | 54.2B | 80B | 208B（双 die） |
+| SM | 16 | 16 | 15 | 24 | 60 | 84 | 72 | 108 | 132 | 148 |
 | Core/SM | 8 | 32 | 192 | 128 | 64 | 64 | 64 | 64 | 128 | 128 |
-| 总 Core | 128 | 512 | 3072 | 2048 | 3840 | 5376 | 4608 | 6912 | 16896 | 21504 |
-| Tensor Core | — | — | — | — | — | 8/SM | 8/SM | 4/SM | 8/SM | 8/SM |
-| L2 | 64KB | 768KB | 512KB | 2MB | 4MB | 6MB | 6MB | 40MB | 50MB | ~100MB |
-| 带宽 | 86.4 | 177 | 288 | 336 | 720 | 900 | 672 | 2000 | 3350 | ~4000 |
-| NVLink | — | — | — | — | v1 | v2 | — | v3 | v4 | v5 |
+| 总 Core | 128 | 512 | 2880 | 3072 | 3840 | 5376 | 4608 | 6912 | 16896 | 18944 |
+| Tensor Core | — | — | — | — | — | 8/SM | 8/SM | 4/SM | 4/SM | 4/SM（第 5 代） |
+| L2 | 768KB | 768KB | 1.5MB | 3MB | 4MB | 6MB | 6MB | 40MB | 50MB | 126MB |
+| 带宽 (GB/s) | 86.4 | 177 | 288 | 336 | 720 | 900 | 672 | 2000 | 3350 | 8000 |
+| NVLink | — | — | — | — | v1 | v2 | v2 | v3 | v4 | v5 |
+
+> 表中数字对应各代的数据中心/旗舰代表型号（G80、GF100、GK110、GM200、GP100、GV100、TU102、GA100、GH100、B200），并非该架构所有 SKU。Blackwell 一列对应 B200（148 SM）；B300 启用 160 SM。
+
 
 ---
 
@@ -169,12 +174,12 @@
 - NVIDIA, *Maxwell GM204 Architecture Whitepaper*, 2014.
 - NVIDIA, *Pascal GP100 Architecture Whitepaper*, 2016.
 - NVIDIA, *Volta V100 GPU Architecture Whitepaper*, 2017.
-- NVIDIA, *Turing T102 GPU Architecture Whitepaper*, 2018.
+- NVIDIA, *Turing TU102 GPU Architecture Whitepaper*, 2018.
 - NVIDIA, *Ampere A100 GPU Architecture Whitepaper*, 2020.
 - NVIDIA, *Hopper H100 GPU Architecture Whitepaper*, 2022.
-- NVIDIA, *Blackwell B200 GPU Architecture Whitepaper*, 2024.
+- NVIDIA, *NVIDIA Blackwell Architecture Technical Brief*, 2024.
 - Lindholm, E. et al., "NVIDIA Tesla: A Unified Graphics and Computing Architecture", *IEEE Micro*, 28(2), 2008, pp. 39-55.
 - Kanter, D., "NVIDIA's Fermi: The First Complete GPU Computing Architecture", *The Real World Tech*, 2009.
 - Kirk, D. B. & Hwu, W. W., *Programming Massively Parallel Processors: A Hands-on Approach*, 3rd ed., Appendix: GPU Architecture History, Morgan Kaufmann, 2016.
 - Foley, D. & Danskin, J., "Ultra-Performance Pascal GPU and NVLink", *IEEE Micro*, 2017.
-- NVIDIA, *GPU Architecture Timeline*, 2024. Available at: developer.nvidia.com
+- NVIDIA, *CUDA C++ Programming Guide*, Appendix: Compute Capabilities, 2024. Available at: docs.nvidia.com/cuda/cuda-c-programming-guide/

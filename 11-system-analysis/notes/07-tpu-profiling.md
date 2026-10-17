@@ -15,15 +15,15 @@ Tensor Processing Unit（TPU）是 Google 为深度学习工作负载专门设�
 | 矩阵乘法单元（MXU） | 128×128 脉动阵列 |
 | 标量处理单元（VPU） | 用于 element-wise 和 reduce 操作 |
 | HBM 容量 | 32 GB（v4）/ 95 GB（v5p） |
-| HBM 带宽 | 1,200 GB/s（v4）/ 1,600 GB/s（v5p） |
-| 片间互联 | 4D Torus 拓扑（每芯片 6 条链路） |
+| HBM 带宽 | 1,200 GB/s（v4）/ 2,765 GB/s（v5p） |
+| 片间互联 | 3D Torus 拓扑（每芯片 6 条链路） |
 | 计算精度 | BF16（MXU）/ FP32（累加器） |
 
-TPU 的 MXU 执行矩阵乘法的方式与 NVIDIA Tensor Core 类似，但规模更大：一个 TPU v4 芯片包含 4 个 MXU，每个周期可完成 128×128×128 = 2,097,152 次乘加操作。
+TPU 的 MXU 执行矩阵乘法的方式与 NVIDIA Tensor Core 类似，但规模更大：一个 TPU v4 芯片包含 2 个 TensorCore，每个 TensorCore 有 4 个 MXU，共 8 个 MXU。每个 MXU 每周期完成 128×128 = 16,384 次乘加；8 个 MXU 合计每周期 131,072 次乘加。因此一次 128×128×128 的矩阵乘法需要 2,097,152 / 131,072 = 16 个周期，而不是 1 个周期。
 
 ### TPU Pod
 
-多个 TPU 芯片通过 4D Torus 互联组成 TPU Pod。例如，TPU v4 Pod 包含 4,096 个芯片，总算力超过 1 exaFLOP（BF16）。TPU 的互联拓扑使得跨芯片通信的延迟和带宽可预测，这是 GPU 集群中常见的 RDMA 网络所不具备的优势。
+多个 TPU 芯片通过 3D Torus 互联组成 TPU Pod。例如，TPU v4 Pod 包含 4,096 个芯片，总算力超过 1 exaFLOP（BF16）。TPU 的互联拓扑使得跨芯片通信的延迟和带宽可预测，这是 GPU 集群中常见的 RDMA 网络所不具备的优势。
 
 ## XLA 编译与 HLO
 
@@ -166,7 +166,8 @@ Input Pipeline Analysis:
 
 如果数据加载时间 > TPU 步时间，需要优化数据管线：
 - 使用 `tf.data.Dataset.prefetch()` 预取数据
-- 使用 JAX 的 `jax.numpy.vectorize_map` 并行数据加载
+- 使用 `tf.data.Dataset.interleave(..., num_parallel_calls=tf.data.AUTOTUNE)` 或 `map(..., num_parallel_calls=...)` 并行数据加载
+- JAX 侧可用 `jax.vmap` / `jax.pmap` 做批处理或数据并行；JAX 没有 `jax.numpy.vectorize_map` 这个 API
 - 增加数据加载的 worker 数量
 - 减小数据预处理的计算量（如使用 TFRecord 格式、提前完成数据增强）
 
@@ -255,11 +256,11 @@ with jax.profiler.TraceAnnotation("backward_pass"):
 
 3. **输入管线分析**：显示数据传输平均耗时 8ms，而 TPU 计算耗时 12ms，数据加载不是瓶颈。
 
-4. **内存分析**：发现模型中存在一个 4096×4096 的矩阵维度，不是 128 的倍数，导致 MXU 需要 padding。
+4. **内存分析**：检查矩阵维度是否对齐到 128。4096 是 128 的倍数（32×），本身不是问题；12 个 head × 128 = 1536 也是 128 的倍数（12×）。应通过 HLO 的 shape 和 padding 统计找出真正未对齐的维度，而不是把 4096 或 1536 当成反例。
 
 **优化措施**：
 
-1. **对齐维度**：将模型的 hidden dimension 从 4096 改为 4096（已经是 128 的倍数）。但发现 attention head 的维度是 128，而 12 个 head 的总维度并不对齐，将 head 数调整为 16 使总维度变为 2048。
+1. **对齐维度**：确认 hidden dimension、head 数和 batch/sequence 维度都按 128 对齐；若某个维度不是 128 的倍数，再调整或 padding。4096 和 1536 本身已经对齐，不能作为“需要改成 2048”的理由。
 
 2. **手动融合**：使用 `jax.lax.fori_loop` 替代 Python for 循环，使 XLA 能更好地融合循环内的操作。
 
@@ -304,4 +305,4 @@ TPU Profiling 与 GPU Profiling 有本质差异：
 5. Google Cloud. "XLA Architecture." *XLA Documentation*, 2024. — XLA 编译器的架构文档和 pass 说明
 6. Frost, J., et al. "JAX Profiling Guide." *JAX Documentation*, 2024. — JAX 的 profiling API 文档
 7. Bradbury, J., et al. "JAX: Composable Transformations of Python+NumPy Programs." *GitHub*, 2024. — JAX 框架的原始论文和 API 说明
-8. Yazdanbakhsh, A., et al. "An Analysis of the Performance of TPU v4 for Deep Learning Workloads." *arXiv:2206.11997*, 2022. — TPU v4 上深度学习工作负载的详细性能分析
+8. Jouppi, N. P., et al. "TPU v4: An Optically Reconfigurable Supercomputer for Machine Learning with Hardware Support for Embeddings." *ISCA 2023*, arXiv:2304.01433. — TPU v4 的正式架构论文

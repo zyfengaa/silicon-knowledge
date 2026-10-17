@@ -17,7 +17,9 @@ PCI Express（PCIe）是 CPU 与 GPU 之间最主要的互连通道。每个 GPU
 | Gen 3 | 128b/130b | 8 | ~16 GB/s | ~32 GB/s |
 | Gen 4 | 128b/130b | 16 | ~32 GB/s | ~64 GB/s |
 | Gen 5 | 128b/130b | 32 | ~64 GB/s | ~128 GB/s |
-| Gen 6 | 128b/130b | 64 | ~128 GB/s | ~256 GB/s |
+| Gen 6 | PAM4 + FLIT + FEC | 64 | ~128 GB/s | ~256 GB/s |
+
+注：Gen 1-5 使用 128b/130b 编码；Gen 6 改用 PAM4 信号（每符号 2 bit）、固定大小的 FLIT 和 FEC 前向纠错，因此不再使用 128b/130b。
 
 ### CPU-GPU 通信模式
 
@@ -56,7 +58,7 @@ cudaMallocManaged(&data, N * sizeof(float));
 // GPU 访问 → 自动页面迁移到显存
 ```
 
-Caveat：频繁的页面错误会导致性能显著下降。统一内存适合访问模式可预测的场景，不适合高性能计算。
+需要注意：页面错误和迁移会显著拖慢性能，但统一内存并非"不能用于高性能计算"。在现代系统上，配合显式预取与访问建议（`cudaMemPrefetchAsync`、`cudaMemAdvise`）以及 HMM/ATS 等机制，统一内存已可用于生产环境（例如 Grace Hopper 的 CPU-GPU 一致地址空间）。若不加以管理、任由 GPU 频繁缺页，则性能可能远低于显式拷贝。
 
 ---
 
@@ -73,7 +75,10 @@ NVLink 是 NVIDIA 开发的高带宽 GPU-GPU 直连接口。与 PCIe 不同，NV
 | NVLink 1 | Pascal | 20 GB/s | 40 GB/s | 4 | 160 GB/s |
 | NVLink 2 | Volta | 25 GB/s | 50 GB/s | 6 | 300 GB/s |
 | NVLink 3 | Ampere | 25 GB/s | 50 GB/s | 12 | 600 GB/s |
-| NVLink 4 | Hopper | 50 GB/s | 100 GB/s | 18 | 900 GB/s |
+| NVLink 4 | Hopper | 25 GB/s | 50 GB/s | 18 | 900 GB/s |
+| NVLink 5 | Blackwell | 50 GB/s | 100 GB/s | 18 | 1,800 GB/s |
+
+注：NVLink 4 每条链路双向 50 GB/s（每个方向 25 GB/s），18 条链路合计 900 GB/s。NVLink 5 每链路双向 100 GB/s，18 条链路合计 1.8 TB/s。表中"总带宽/GPU"一列均为双向合计。
 
 ### NVLink 拓扑
 
@@ -122,8 +127,8 @@ DGX H100（8 GPU）NVLink 拓扑：
 
 | 对比维度 | PCIe Gen5 x16 | NVLink 4 (H100) |
 |---------|--------------|-----------------|
-| 带宽 | 64 GB/s（双向） | 900 GB/s（双向，18 链路） |
-| 延迟 | ~5 μs | ~1-2 μs |
+| 带宽 | ~64 GB/s（单向）/ ~128 GB/s（双向） | 900 GB/s（双向，18 链路） |
+| 延迟 | ~1-2 μs | ~1-2 μs |
 | 拓扑 | 树形（CPU为中心） | 全互联（任意 GPU 直接通信） |
 | 协议 | 标准 | NVIDIA 专用 |
 | 用途 | CPU-GPU 通信 | GPU-GPU 直接通信 |
@@ -151,6 +156,15 @@ NVSwitch 全互联拓扑（每 GPU 连接到所有 NVSwitch）：
 ```
 
 DGX H100 中每台服务器有 4 个 NVSwitch，每个 GPU 连接到所有 4 个 NVSwitch，提供 900 GB/s 的总 GPU-GPU 带宽。
+
+### NVLink 5 与 GB200 NVL72
+
+Blackwell 世代的 NVLink 5 将每 GPU 的双向带宽提升到 1.8 TB/s。GB200 NVL72 通过 NVSwitch 把机架内的 72 个 Blackwell GPU 全互联，使整个机架在逻辑上像一个大型 GPU 一样通信；这是"纵向扩展（scale-up）"与 InfiniBand 的"横向扩展（scale-out）"的分界。
+
+另有两个容易混淆的互连：
+
+- **NVLink-C2C**：Grace CPU 与 Hopper/Blackwell GPU 之间的芯片间一致性互连（Grace Hopper 上为 900 GB/s 双向）。
+- **NV-HBI**：Blackwell B200 两个计算 die 之间的高带宽互连（10 TB/s），用于把双 die 组成一颗逻辑 GPU；它不是 GPU 之间的 NVLink。
 
 ### NVSwitch 优势
 

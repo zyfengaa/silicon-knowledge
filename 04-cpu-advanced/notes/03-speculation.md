@@ -31,15 +31,16 @@
 
 ### 误预测代价
 
-误预测代价 = 清空流水线的周期数
+误预测的**周期代价**约等于从取指到分支解析之间的流水线级数；被浪费的**指令槽**约等于这些周期乘以发射宽度。
 
 ```
-误预测代价 = (分支执行阶段的流水线深度) × 发射宽度
+误预测周期代价 ≈ 分支解析级数
+浪费的指令槽   ≈ 周期数 × 发射宽度
 ```
 
 示例：
-- 假设流水线深度 15 级，发射宽度 4
-- 一次误预测浪费约 15 × 4 = 60 条指令的进度
+- 假设分支在 15 级深的位置解析，发射宽度 4
+- 一次误预测浪费约 15 个周期，约 15 × 4 = 60 个指令槽的进度
 - 假设误预测率 2%，每条分支执行后平均有 5 条指令提交
 - 性能损失 ≈ 5% ~ 15%
 
@@ -62,8 +63,8 @@ if (cond1) {
 ```
 
 - 支持多级推测的处理器需要在 ROB 中为每条指令标记其推测深度
-- 回滚时只需清空深度大于或等于误预测分支深度的指令
-- Apple M1 Firestorm 的支持深度：推测深度不小于分支条件计算路径长度
+- 回滚时按程序序清空该分支之后的所有指令（无论其推测深度），而不是只清空深度更大的指令
+- 实际支持深度取决于 ROB 容量和检查点/恢复机制的设计
 
 ## 推测执行的其他形式
 
@@ -150,4 +151,3 @@ variable = probe_array[value];  // 乱序执行已经在推测中访问了 probe
 - Kocher, P. et al. "Spectre Attacks: Exploiting Speculative Execution." *IEEE S&P*, 2019.
 - Lipp, M. et al. "Meltdown: Reading Kernel Memory from User Space." *USENIX Security*, 2018.
 - Hwu, W. W. & Patt, Y. N. "Checkpoint Repair for Out-of-Order Execution Machines." *ISCA*, 1987.
-- McKeeman, W. M. "The Cost of Branch Misprediction." *IEEE Micro*, 2020.

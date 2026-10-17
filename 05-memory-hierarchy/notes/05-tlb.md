@@ -26,8 +26,8 @@ TLB 通常是**全相联**或**高度组相联**的小型缓存（通常 32–10
 | CPU | L1 TLB (指令/数据) | L2 TLB (统一) |
 |-----|-------------------|--------------|
 | Intel Skylake | 64 项 (ITLB), 64 项 (DTLB) | 1536 项, 8-way |
-| AMD Zen 4 | 72 项 (ITLB), 72 项 (DTLB) | 4096 项, 16-way |
-| ARM Cortex-X2 | 48 项 (L1 ITLB), 48 项 (L1 DTLB) | ~2048 项, 5-way |
+| AMD Zen 4 | 72 项 (ITLB), 72 项 (DTLB) | 3072 项（相联度见 AMD Software Optimization Guide） |
+| ARM Cortex-X2 | 48 项 (L1 ITLB), 48 项 (L1 DTLB) | 2048 项, 8-way |
 
 **TLB 项的内容**：
 
@@ -77,7 +77,7 @@ x86-64 4KB 页的 4 级页表遍历:
 | L1 缓存 Miss（在 L2 命中） | ~10 ns |
 | TLB Miss（页表遍历，PTE 在 L3 命中） | ~30 ns |
 | TLB Miss（全部 DRAM 访问） | ~300 ns |
-| TLB Miss + 页表项不在 DRAM（缺页中断 → 磁盘 I/O） | ~数百万 ns |
+| TLB Miss + 目标页面不在物理内存（缺页异常 → 磁盘/SSD I/O） | ~数百万 ns |
 
 一次 TLB Miss 可能触发 4 次内存访问（多级页表遍历），代价远高于一次缓存 Miss。
 
@@ -129,7 +129,7 @@ TLB 64 项, 2 MB 页 → Reach = 128 MB
 
 这里涉及一个设计选择：缓存的 Tag 使用虚拟地址（VIVT）还是物理地址（PIPT）？
 
-- **VIVT (Virtually Indexed, Virtually Tagged)**：快，但同义词问题（多个虚拟地址映射到同一物理地址）
+- **VIVT (Virtually Indexed, Virtually Tagged)**：快，但存在同义词问题（多个虚拟地址映射到同一物理地址）和同音词/歧义问题（同一虚拟地址在不同进程中含义不同，需要 ASID/进程切换时刷新）
 - **PIPT (Physically Indexed, Physically Tagged)**：不存在同义词问题，但要等 TLB 转换后才能读 Tag——慢
 - **VIPT (Virtually Indexed, Physically Tagged)**：多数现代 CPU 的选择。用虚拟地址的 Index（低位，不经过 TLB）快速选组，用物理 Tag 确认命中
 

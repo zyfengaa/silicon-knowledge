@@ -1,8 +1,11 @@
 # Silicon Knowledge ⚡️
 
-> **从晶体管到 TPU，系统性地理解硬件工作逻辑。**
+> **从数字逻辑到 TPU，系统性地理解硬件工作逻辑。**
 >
 > 一个面向软件工程师的硬件学习仓库。不满足于"调 API"，追求知道**代码在硬件上到底怎么跑**。
+
+> **范围说明**：当前版本以**计算机体系结构**为主线（数字逻辑 → CPU → GPU/NPU/TPU → 系统分析），
+> 器件物理、CMOS 电路、半导体工艺与先进封装等内容尚未覆盖，规划为独立模块。
 
 ---
 
@@ -54,6 +57,7 @@ silicon-knowledge/
 ├── 10-other-accelerators/   # 其他加速器
 ├── 11-system-analysis/      # 系统分析与性能工程
 ├── projects/                # 综合实践项目
+├── SPECS.md                 # 硬件规格基线（数字口径的单一事实来源）
 ├── GLOSSARY.md              # 术语表
 ├── ROADMAP.md               # 详细学习路线图
 ├── STYLEGUIDE.md            # 写作规范
@@ -67,7 +71,7 @@ module-name/
 ├── README.md        # 本模块学习地图
 ├── notes/           # 核心笔记（编号文档）
 ├── code/            # 可运行的代码示例
-├── diagrams/        # 架构图（源文件 + PNG）
+├── diagrams/        # 架构图（可选，部分模块提供）
 ├── papers/          # 论文阅读笔记
 └── exercises/       # 练习题 + 答案
 ```
@@ -78,7 +82,7 @@ module-name/
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-username/silicon-knowledge.git
+git clone https://github.com/zyfengaa/silicon-knowledge.git
 cd silicon-knowledge
 
 # 从第一模块开始
@@ -91,6 +95,7 @@ cd 01-digital-logic
 ## ✍️ 内容规范
 
 本仓库所有技术内容**必须基于权威参考资料编写**，每篇文章末尾附参考文献列表。
+硬件规格数字（算力、带宽、容量、功耗）统一以 [SPECS.md](SPECS.md) 为基线，并注明单芯片/板卡/Pod 口径。
 
 详见 [STYLEGUIDE.md](STYLEGUIDE.md)。
 
@@ -106,7 +111,7 @@ cd 01-digital-logic
 | GPU | *Professional CUDA C Programming* (Cheng & Grossman) | CUDA 工程实践 |
 | NPU | Eyeriss / DianNao 系列论文 | NPU 经典架构 |
 | TPU | Google TPU 系列论文 (v1~v4) | 最一手的设计思路 |
-| 系统 | *Performance Analysis and Tuning* | 性能分析工具方法论 |
+| 系统 | *Systems Performance* (Brendan Gregg) | 性能分析与工具方法论 |
 
 ---
 

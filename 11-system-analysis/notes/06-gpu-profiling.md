@@ -151,7 +151,7 @@ Compute Throughput:
 ncu 的 Speed-of-Light 页面将 kernel 性能分解为若干个"限制因素"的百分比：
 
 ```
-Speed Of Light (24 SM, 2048 FP32 Cores):
+Speed Of Light (24 SM, 3,072 FP32 Cores，24×128):
   Memory:  45.6%
   Compute: 54.4%
 ```
@@ -172,7 +172,7 @@ Warp Stall Reasons:
 ```
 
 - **Long Scoreboard** 占比高说明 warp 因等待从全局或本地内存加载数据而停顿，是 memory-bound 的典型表现
-- **Short Scoreboard** 通常是等待 shared memory 或寄存器操作
+- **Short Scoreboard** 通常是等待 shared memory、constant memory 或 texture 等 MIO 操作完成；寄存器数据依赖造成的固定延迟停顿通常归为 **Wait**
 - **Not Predicated Off** 是 warp 在执行 if/else 等分支时另一部分线程被屏蔽的开销
 
 ### 使用 ncu 的典型工作流
@@ -234,7 +234,7 @@ Memory Throughput:
   HBM: 1,500 GB/s (81% peak)
 
 Occupancy:
-  Achieved: 95.2%   <- occupancy 很高，说明对内存延迟不敏感
+  Achieved: 95.2%   <- occupancy 很高，有助于隐藏内存延迟；但该 kernel 仍是 memory-bound
 
 L1 Hit Rate: 45.3%  <- 较低的 L1 命中率
 L2 Hit Rate: 72.1%
@@ -289,9 +289,9 @@ rocprof --stats ./my_hip_app
 rocprof --trace ./my_hip_app
 ```
 
-rocprof 的输出包含 kernel 耗时、内存传输、occupancy 和 cache 命中率等指标。AMD 的 rocprof 架构与 ncu 对应，但指标集和命名有所不同。例如，AMD 使用 Wavefront（64 线程，相当于 NVIDIA 的 warp）作为调度单元单位，occupancy 的计算也基于 Wavefront 而非 warp。
+rocprof 的输出包含 kernel 耗时、内存传输、occupancy 和 cache 命中率等指标。AMD 的 rocprof 架构与 ncu 对应，但指标集和命名有所不同。AMD 使用 Wavefront 作为调度单位：GCN/CDNA 架构通常为 64 线程，RDNA 架构为 wave32；occupancy 的计算也基于对应的 wave 大小。
 
-### Google PAI Profiler（TPU）
+### Google Cloud TPU Profiler（TPU）
 
 Google Cloud TPU 的 profiling 工具链在笔记 07 中详细讨论。其核心区别是 TPU 使用 XLA 编译器和 TensorBoard profiler，与 GPU profiling 的工具链完全不同。
 

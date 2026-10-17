@@ -24,7 +24,7 @@ J-type:   | imm[20|10:1|11|19:12]                            | rd[11:7] | opcode
 | rs1        | [19:15]     | First source register operand                              |
 | rs2        | [24:20]     | Second source register operand                             |
 | funct7     | [31:25]     | 7-bit opcode modifier (R-type)                             |
-| imm        | varies      | Immediate value, sign-extended to 32 bits                  |
+| imm        | varies      | Immediate value; sign-extended for I/S/B/J types, while U-type places imm[31:12] |
 
 ### Format-by-Format Breakdown
 
@@ -50,7 +50,7 @@ Used for arithmetic/logical operations on two register operands.
 
 Encoded binary: `0000000 00011 00010 000 00001 0110011`
 
-Hex: `0x002100B3`
+Hex: `0x003100B3`
 
 #### I-type (Immediate)
 
@@ -73,7 +73,7 @@ Used for immediate arithmetic, loads, and JALR. The immediate field is sign-exte
 
 Encoded binary: `111111111011 00010 000 00001 0010011`
 
-Hex: `0xFFF10113`
+Hex: `0xFFB10093`
 
 #### S-type (Store)
 
@@ -104,38 +104,30 @@ Hex: `0x00112423`
 Used for conditional branches. The immediate encodes a signed PC-relative offset. Bit 0 of the offset is always 0 (instruction alignment), so bit [0] is not stored.
 
 ```
-31          30|29       25|24   20|19   15|14      12|11    10|9      8|7       0
-+------------+-----------+--------+--------+----------+-------+--------+---------+
-|  [12|10:5] |   rs2     |  rs1   | funct3  |[4:1|11] | opcode |
-|  imm[12]   | imm[10:5] | 5 bits | 5 bits | 3 bits  |imm[9:4]|imm[4:1]|imm[11] |
-+------------+-----------+--------+--------+----------+--------+--------+---------+
+31      30|29          25|24  20|19  15|14  12|11  8|7      |6     0
++---------+--------------+-------+-------+------+-------+-------+-------+
+| imm[12] | imm[10:5]    |  rs2  |  rs1  |funct3|imm[4:1]|imm[11]|opcode |
+| 1 bit   | 6 bits       | 5 bit | 5 bit |3 bit | 4 bit | 1 bit | 7 bit |
++---------+--------------+-------+-------+------+-------+-------+-------+
 ```
 
-Simplified view:
-```
-31       25|24   20|19   15|14      12|11       7|6      0
-+-----------+--------+--------+----------+----------+--------+
-| imm[12|10:5] |  rs2 |  rs1  |  funct3  | imm[4:1|11]|opcode |
-|  7 bits      |5 bits|5 bits |  3 bits  |  5 bits   |7 bits  |
-+-----------+--------+--------+----------+----------+--------+
-```
+Note that the 13-bit signed offset has its least-significant bit implicit (always 0), so the stored fields are `imm[12]`, `imm[10:5]`, `imm[4:1]`, and `imm[11]`.
 
 **Example `beq x1, x2, label`** (where label is +16 bytes = +4 instructions):
 - opcode = 1100011 (0x63)
 - funct3 = 000
 - rs1 = x1 = 00001
 - rs2 = x2 = 00010
-- imm = 16 = 000000010000
+- imm = 16 = 0 000000 1000 0 (offset bits [12|10:5|4:1|11])
 
-B-type immediate encoding: bit[12|10:5|4:1|11]
-Bit positions of 16 (binary 000000010000):
-- bit 12 = 0, bits 10:5 = 000001, bits 4:1 = 0000, bit 11 = 0
-- So imm[12|10:5] = 0|000001 = 0000001
-- imm[4:1|11] = 0000|0 = 00000
+Bit positions of 16 (binary 000000010000, i.e. only bit 4 is set):
+- bit 12 = 0, bits 10:5 = 000000, bits 4:1 = 1000, bit 11 = 0
+- So imm[12|10:5] = 0|000000 = 0000000
+- imm[4:1|11] = 1000|0 = 10000
 
-Binary: `0000001 00010 00001 000 00000 1100011`
+Binary: `0000000 00010 00001 000 10000 1100011`
 
-Hex: `0x00208463`
+Hex: `0x00208863`
 
 #### U-type (Upper immediate)
 
@@ -210,11 +202,11 @@ Note: For shifts, funct7 distinguishes SRLI (0000000) from SRAI (0100000).
 | LW       | rd = M[rs1+imm]              | 010    | 0000011|
 | LBU      | rd = zext(M[rs1+imm], 8 bits)| 100    | 0000011|
 | LHU      | rd = zext(M[rs1+imm],16 bits)| 101    | 0000011|
-| SB       | M[rs1+imm] = rs1[7:0]        | 000    | 0100011|
-| SH       | M[rs1+imm] = rs1[15:0]       | 001    | 0100011|
-| SW       | M[rs1+imm] = rs1             | 010    | 0100011|
+| SB       | M[rs1+imm] = rs2[7:0]        | 000    | 0100011|
+| SH       | M[rs1+imm] = rs2[15:0]       | 001    | 0100011|
+| SW       | M[rs1+imm] = rs2             | 010    | 0100011|
 
-LW example encoding: `lw x1, 8(x2)` (already shown above in I-type).
+Load and store instructions both use the same 12-bit signed immediate; loads place it in the I-type imm[11:0] field, while stores split it into imm[11:5] and imm[4:0].
 
 #### Branch Instructions (B-type)
 
@@ -263,7 +255,7 @@ LW example encoding: `lw x1, 8(x2)` (already shown above in I-type).
 - rs2 = x12 = 01100
 - funct7 = 0100000 (distinguishes SUB from ADD)
 - Binary: `0100000 01100 01011 000 01010 0110011`
-- Hex: `0x40C582B3`
+- Hex: `0x40C58533`
 
 ---
 

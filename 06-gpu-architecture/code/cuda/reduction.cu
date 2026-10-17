@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <sys/time.h>
+#include <chrono>
 
 #define N (1 << 24)      // 16,777,216 个元素
 #define BLOCK_SIZE 256
@@ -49,7 +49,8 @@ __global__ void reduce_kernel(const float *in, float *out, int n) {
     sdata[tid] = val;
     __syncthreads();
 
-    // 阶段 1：共享内存树形归约（直到 32 个元素）
+    // 阶段 1：共享内存树形归约（循环结束时剩余 64 个部分和）
+    // 条件 s > 32：当 s 降到 32 时停止，此时 sdata[0..63] 是有效部分和
     for (unsigned int s = blockDim.x / 2; s > 32; s >>= 1) {
         if (tid < s) {
             sdata[tid] += sdata[tid + s];
@@ -57,7 +58,7 @@ __global__ void reduce_kernel(const float *in, float *out, int n) {
         __syncthreads();
     }
 
-    // 阶段 2：最后 32 个元素使用 warp shuffle 原语
+    // 阶段 2：把剩余 64 个部分和两两合并为 32 个，再用 warp shuffle 归约
     if (tid < 32) {
         float warp_sum = sdata[tid];
         // 如果 blockDim.x > 32，从共享内存中取第 32+ 个值
@@ -79,11 +80,10 @@ __global__ void reduce_kernel(const float *in, float *out, int n) {
     }
 }
 
-// 计时辅助函数
+// 计时辅助函数（返回秒）
 double get_time() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec + tv.tv_usec * 1e-6;
+    using clock = std::chrono::steady_clock;
+    return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
 }
 
 int main() {
@@ -114,9 +114,9 @@ int main() {
 
     // ============ GPU 归约 ============
     float *d_in, *d_out;
-    cudaMalloc(&d_in, N * sizeof(float));
+    cudaMalloc((void **)&d_in, N * sizeof(float));
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    cudaMalloc(&d_out, num_blocks * sizeof(float));
+    cudaMalloc((void **)&d_out, num_blocks * sizeof(float));
 
     cudaMemcpy(d_in, h_data, N * sizeof(float), cudaMemcpyHostToDevice);
 
@@ -143,8 +143,9 @@ int main() {
         gpu_sum += h_partial[i];
     }
 
-    // 验证
-    bool pass = (fabs(cpu_sum - gpu_sum) < 1.0f);
+    // 验证：浮点求和顺序不同会带来舍入差异，使用相对误差
+    float tolerance = 1e-4f * fmaxf(1.0f, fabsf(cpu_sum));
+    bool pass = (fabsf(cpu_sum - gpu_sum) <= tolerance);
     printf("GPU 归约结果:   %f\n", gpu_sum);
     printf("GPU Kernel 时间: %.4f ms\n", kernel_ms);
     printf("验证:           %s\n\n", pass ? "PASSED" : "FAILED");

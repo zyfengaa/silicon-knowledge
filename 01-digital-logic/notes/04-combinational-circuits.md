@@ -86,7 +86,7 @@ P_i = A_i XOR B_i         -- propagates Cin to Cout
 C_{i+1} = G_i + P_i.C_i
 ```
 
-**Expanded carries** (all computed from C0 in one gate delay):
+**Expanded carries** (all expressed directly in terms of C0; in the ideal two-level AND-OR model this is one gate delay):
 
 ```
 C1 = G0 + P0.C0
@@ -94,7 +94,7 @@ C2 = G1 + P1.G0 + P1.P0.C0
 C3 = G2 + P2.G1 + P2.P1.G0 + P2.P1.P0.C0
 ```
 
-Each carry requires only a 2-level AND-OR circuit. The CLA computes N-bit addition in O(log N) delay vs. O(N) for RCA, at the cost of more gates.
+Each carry can be written as a 2-level AND-OR expression. With unbounded fan-in this is O(1); practical gates have limited fan-in, so a real CLA is built as a prefix tree and achieves O(log N) delay vs. O(N) for RCA, at the cost of more gates.
 
 ---
 
@@ -243,10 +243,10 @@ Where t_critical is the sum of all gate delays along the critical path [2].
 
 1. Mano, M. M., & Ciletti, M. D. (2018). *Digital Design: With an Introduction to the Verilog HDL, VHDL, and SystemVerilog* (6th ed.). Pearson. Chapter 4: Combinational Logic.
 
-2. Patterson, D. A., & Hennessy, J. L. (2017). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Appendix B: The Basics of Logic Design.
+2. Patterson, D. A., & Hennessy, J. L. (2013). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Appendix B: The Basics of Logic Design.
 
 3. Harris, S., & Harris, D. (2015). *Digital Design and Computer Architecture* (2nd ed.). Morgan Kaufmann. Chapter 5: Digital Building Blocks.
 
 4. Weinberger, A., & Smith, J. L. (1958). A Logic for High-Speed Addition. *National Bureau of Standards Circular*, 591, 3-12.
 
-5. Koren, I. (2002). *Computer Arithmetic Algorithms* (2nd ed.). A K Peters/CRC Press. Chapter 2: Addition.
+5. Koren, I. (2002). *Computer Arithmetic Algorithms* (2nd ed.). A K Peters/CRC Press. Chapter 5: Fast Addition.

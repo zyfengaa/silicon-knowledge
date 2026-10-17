@@ -10,7 +10,14 @@ pipeline_perf.py — 流水线性能分析工具
 支持从指令序列进行 RAW 依赖分析，并基于分支比例估算 CPI。
 """
 
+import os
+import sys
 from typing import List, Tuple
+
+# Allow running with `python -I`: isolated mode does not put this script's
+# directory on sys.path, so add it explicitly before importing the simulator.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from pipeline_sim import Instruction, OpType, PipelineSim
 
 
@@ -77,7 +84,8 @@ class PipelinePerformanceModel:
                 self._find_raw_source(i, inst.rs1, raws)
 
             # 检查 rs2 (源操作数 2)
-            if inst.needs_rs2() and inst.rs2 != 0:
+            # 若 rs1 == rs2（如 add x5, x1, x1），只记录一次依赖。
+            if inst.needs_rs2() and inst.rs2 != 0 and inst.rs2 != inst.rs1:
                 self._find_raw_source(i, inst.rs2, raws)
 
         return raws
@@ -90,12 +98,14 @@ class PipelinePerformanceModel:
             if prev.is_nop():
                 continue
             if prev.writes_register() and prev.rd == reg:
-                # 判断依赖类型
-                # 如果前一条是 load → load-use 冒险
-                if prev.op_type == OpType.LOAD:
+                # 判断依赖类型：
+                #   只有“紧邻的 load-use”才需要 1 个停顿周期。
+                #   相隔 1 条指令的 load 结果在消费者进入 EX 时已到
+                #   MEM/WB，可通过转发获得，不需要停顿。
+                if prev.op_type == OpType.LOAD and j == curr_idx - 1:
                     dep_type = 2  # load-use, 需要停顿
                 else:
-                    dep_type = 1  # ALU → ALU, 转发可解决
+                    dep_type = 1  # 转发可解决
                 raws.append((curr_idx, j, dep_type))
                 return  # 只找最近的写入者
             # 如果前一条指令也要写同一个寄存器，但更远的依赖
@@ -129,9 +139,11 @@ class PipelinePerformanceModel:
         参数:
           predictor_accuracy: 分支预测准确率 (0~1)
           branch_penalty: 预测错误代价 (周期数)
+        未显式给出 branch_ratio 时，按“条件分支 + 跳转”占全部指令的比例计算。
         """
         if branch_ratio is None:
-            branch_ratio = self.get_type_ratios()['branch']
+            # 控制流指令包括条件分支和（直接/间接）跳转。
+            branch_ratio = (self.branch_count + self.jump_count) / max(self.n, 1)
 
         mispredict_rate = 1.0 - predictor_accuracy
         return branch_ratio * mispredict_rate * branch_penalty
@@ -287,10 +299,10 @@ def make_load_intensive_sequence() -> List[Instruction]:
         Instruction("lw   x1, 0(x2)",  OpType.LOAD,    rd=1, rs1=2, imm=0),
         Instruction("lw   x3, 4(x2)",  OpType.LOAD,    rd=3, rs1=2, imm=4),
         Instruction("add  x5, x1, x3", OpType.ALU_REG, rd=5, rs1=1, rs2=3),
-        Instruction("sw   x5, 8(x2)",  OpType.STORE,   rs1=5, rs2=2, imm=8),
+        Instruction("sw   x5, 8(x2)",  OpType.STORE,   rs1=2, rs2=5, imm=8),
         Instruction("lw   x6, 8(x2)",  OpType.LOAD,    rd=6, rs1=2, imm=8),
         Instruction("addi x7, x6, 1",  OpType.ALU_IMM, rd=7, rs1=6, imm=1),
-        Instruction("sw   x7, 12(x2)", OpType.STORE,   rs1=7, rs2=2, imm=12),
+        Instruction("sw   x7, 12(x2)", OpType.STORE,   rs1=2, rs2=7, imm=12),
         Instruction("lw   x8, 12(x2)", OpType.LOAD,    rd=8, rs1=2, imm=12),
         Instruction("add  x9, x8, x0", OpType.ALU_REG, rd=9, rs1=8, rs2=0),
     ]
@@ -349,7 +361,7 @@ if __name__ == "__main__":
     instructions = make_branch_test_sequence()
     model = PipelinePerformanceModel(instructions)
 
-    print(f"\n场景: {desc}")
+    print(f"\n场景: 含分支指令序列")
     print(f"{'准确率':>8s} {'理想 CPI':>9s} {'数据 CPI':>9s} {'总 CPI':>9s}")
     print(f"{'-' * 40}")
 

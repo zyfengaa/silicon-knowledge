@@ -150,30 +150,21 @@ float c = shmem[threadIdx.x * 33];
 
 ### 问题 4.2
 
-考虑一个声明为 `__shared__ float s_data[32][32]` 的二维共享内存数组。一个包含 32 个线程的 warp（threadIdx.x 范围 0-31，threadIdx.y 固定）按以下方式访问该数组：
+考虑一个声明为 `__shared__ float s_data[32][32]` 的二维共享内存数组，以及一个二维线程块 `dim3 block(32, 32)`。线程的线性编号为 `tx + ty * 32`，因此一个 warp 是 **ty 固定、tx = 0..31** 的 32 个线程。线程 `(tx, ty)` 分别按以下方式访问：
 
 ```cuda
-// 模式 1：行主序（row-major）
-float v1 = s_data[threadIdx.x][threadIdx.y];
+// 模式 1
+float v1 = s_data[tx][ty];
 
-// 模式 2：列主序（column-major）
-float v2 = s_data[threadIdx.x][threadIdx.y];
+// 模式 2
+float v2 = s_data[ty][tx];
 ```
 
-等等——两者看起来一样。让我们更精确一些。线程 (tx, ty) 执行：
+对每种模式：
 
-```cuda
-// 模式 1：无冲突
-float val = s_data[tx][ty];  // tx = threadIdx.x, ty = threadIdx.y
-
-// 模式 2：bank 冲突
-float val = s_data[ty][tx];  // 交换：tx = threadIdx.x, ty = threadIdx.y
-```
-
-假设一个二维块 `dim3 block(32, 32)`：
-- 对于模式 1，当 `ty` 在 warp 内变化时分析访问模式（warp = 具有相同 tx、不同 ty 的线程）。提示：连续的 ty 值是否在同一个 bank 中？
-- 对于模式 2，当 `tx` 在 warp 内变化时分析访问模式（warp = 具有相同 tx、不同 ty 的线程）。展示 bank 映射。
-- 如何使用填充（padding）修复模式 2？
+- 写出 bank 映射公式 `bank = (row * 32 + col) % 32`，计算 warp 内 32 个线程命中的 bank；
+- 判断是否存在 bank conflict、是几路冲突；
+- 说明如何用填充（padding）修复有冲突的模式。
 
 ### 问题 4.3
 

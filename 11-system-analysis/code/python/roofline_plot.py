@@ -26,9 +26,17 @@ import argparse
 import sys
 from pathlib import Path
 
-import matplotlib
-import matplotlib.pyplot as plt
-import numpy as np
+try:
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import numpy as np
+except ImportError as exc:
+    raise SystemExit(
+        "This script requires numpy and matplotlib.\n"
+        "Install them with:\n"
+        "    python -m pip install numpy matplotlib\n"
+        f"Original error: {exc}"
+    )
 
 matplotlib.rcParams.update({
     "font.size": 12,
@@ -121,8 +129,12 @@ def make_roofline_plot(
     """
     ridge_ai = compute_ridge_point(peak_gflops, peak_gbps)
 
-    # X axis: arithmetic intensity, log scale from 0.1 to 100 FLOP/Byte
-    ai = np.logspace(-1, 2, 500)
+    # X axis: cover the ridge point and all annotated kernels.  A fixed
+    # 0.1..100 range hides the ridge for high compute-to-bandwidth ratios
+    # (e.g. A100: 312000/2000 = 156) and can push kernels off the right edge.
+    max_kernel_ai = max((k.ai for k in kernels), default=0.0) if kernels else 0.0
+    x_max = max(120.0, ridge_ai * 1.5, max_kernel_ai * 1.2)
+    ai = np.logspace(-1, np.log10(x_max), 500)
     attainable = roofline_performance(ai, peak_gflops, peak_gbps)
 
     fig, ax = plt.subplots(figsize=(10, 7))
@@ -130,10 +142,11 @@ def make_roofline_plot(
     # -- Ceiling lines ------------------------------------------------------
     # Memory ceiling: y = AI * bandwidth  (diagonal, shown for the whole range)
     mem_ceiling = ai * peak_gbps
-    # Clamp memory ceiling to <= peak_gflops for drawing
-    mem_ceiling_clipped = np.minimum(mem_ceiling, peak_gflops * 1.05)
+    # Clip at the compute ceiling so the memory line does not rise above it.
+    mem_ceiling_clipped = np.minimum(mem_ceiling, peak_gflops)
 
-    ax.loglog(ai, mem_ceiling, "b-", linewidth=2.0, label="Memory ceiling "
+    ax.loglog(ai, mem_ceiling_clipped, "b-", linewidth=2.0,
+              label="Memory ceiling "
               f"(BW = {peak_gbps:.0f} GB/s)")
 
     # Compute ceiling
@@ -146,7 +159,8 @@ def make_roofline_plot(
     ridge_label = f"Ridge = {ridge_ai:.1f} FLOP/Byte"
     ax.annotate(ridge_label,
                 xy=(ridge_ai, peak_gflops),
-                xytext=(ridge_ai * 2.0, peak_gflops * 0.6),
+                xytext=(min(ridge_ai * 1.5, x_max * 0.9),
+                        peak_gflops * 0.6),
                 arrowprops=dict(arrowstyle="->", color="gray", lw=1.2),
                 fontsize=11, color="gray",
                 bbox=dict(boxstyle="round,pad=0.3", fc="lightyellow",
@@ -162,7 +176,7 @@ def make_roofline_plot(
     # Region label
     ax.text(0.18, peak_gflops * 0.12, "Memory-bound", fontsize=13,
             color="blue", alpha=0.6, rotation=90, va="bottom")
-    ax.text(ridge_ai * 1.8, peak_gflops * 0.12, "Compute-bound",
+    ax.text(ridge_ai * 1.2, peak_gflops * 0.12, "Compute-bound",
             fontsize=13, color="red", alpha=0.6, rotation=90, va="bottom")
 
     # -- Kernel scatter points ----------------------------------------------
@@ -181,7 +195,7 @@ def make_roofline_plot(
                                   ec=k.color, alpha=0.85))
 
     # -- Axes limits & labels -----------------------------------------------
-    ax.set_xlim(0.08, 120)
+    ax.set_xlim(0.08, x_max)
     ax.set_ylim(1, peak_gflops * 1.6)
     ax.set_xlabel("Arithmetic Intensity (FLOP/Byte)")
     ax.set_ylabel("Performance (GFLOPS)")
@@ -245,9 +259,8 @@ def default_kernels() -> list[KernelPoint]:
         ),
         KernelPoint(
             name="MatMul (4096, BF16 TC)",
-            ai=180.0,      # 2*4096^3 / (3*4096^2*2) = 4096/3 ≈ 1365 → but
-                           # with tiling memory traffic ~180 is more realistic
-            perf=270000.0, # Tensor Core ~270 TFLOPS on A100
+            ai=1365.3,     # theoretical: 2*4096^3 / (3*4096^2*2) ≈ 1365
+            perf=270000.0, # representative Tensor Core throughput on A100
             marker="*",
             color="#E91E63",
         ),

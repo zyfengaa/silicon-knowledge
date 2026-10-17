@@ -67,7 +67,7 @@ cudaFree(d_a);
 // 1. 分配
 float *h_a = (float*)malloc(N * sizeof(float));
 float *d_a;
-cudaMalloc(&d_a, N * sizeof(float));
+cudaMalloc((void**)&d_a, N * sizeof(float));
 
 // 2. 初始化 Host 数据
 for (int i = 0; i < N; i++) h_a[i] = i;
@@ -101,7 +101,7 @@ free(h_a);
     }                                              \
 } while(0)
 
-CUDA_CHECK(cudaMalloc(&d_a, N * sizeof(float)));
+CUDA_CHECK(cudaMalloc((void**)&d_a, N * sizeof(float)));
 ```
 
 ## 内存层次结构
@@ -112,10 +112,10 @@ CUDA 提供了多级内存，每一级有不同的速度、容量和可见性：
 |----------|------|--------|------|------|----------|
 | Global Memory | VRAM | 所有线程 + Host | ~200-800 cycles | 最大（GB 级） | 输入/输出数据 |
 | Shared Memory | SM 上（SRAM） | Block 内所有线程 | ~30 cycles | 小（~48-228 KB/SM） | 协作、缓存 |
-| Registers | SM 上 | 线程私有 | 0-1 cycle | 有限（~256/SM） | 中间计算结果 |
+| Registers | SM 上 | 线程私有 | 0-1 cycle | 65,536 个 32-bit 寄存器/SM（256 KB）；每线程最多 255 | 中间计算结果 |
 | Local Memory | VRAM | 线程私有 | ~200-800 cycles | 无上限 | 寄存器溢出 |
-| Constant Memory | VRAM (缓存) | 所有线程 | ~1 cycle (命中时) | 64 KB | 只读常量 |
-| Texture Memory | VRAM (缓存) | 所有线程 | ~1 cycle (命中时) | 无上限 | 只读、空间局部性 |
+| Constant Memory | VRAM (缓存) | 所有线程 | 低（命中缓存时） | 64 KB | 只读常量 |
+| Texture Memory | VRAM (缓存) | 所有线程 | 低（命中缓存时） | 无上限 | 只读、空间局部性 |
 
 ```
 Thread
@@ -203,9 +203,9 @@ cudaFree(x);
 
 ### Unified Memory 的工作原理
 
-1. **Page Fault 驱动迁移**：访问 Unified Memory 指针时，如果页面不在当前处理器的内存中，触发 Page Fault
+1. **Page Fault 驱动迁移**：访问 Unified Memory 指针时，如果页面不在当前处理器的内存中，触发 Page Fault（Pascal 及之后由访问计数器驱动，可提前判断迁移方向）
 2. **自动迁移**：驱动程序将页面迁移到访问方的内存
-3. **逐页迁移**：迁移以 4 KB 或 64 KB 页面为单位
+3. **逐页迁移**：GPU 侧通常以 64 KB 页面为单位（部分系统支持 2 MB 大页）；CPU 侧页大小通常为 4 KB
 
 ```
 初始状态: 所有页面在 Host
@@ -225,9 +225,29 @@ Kernel 继续执行（等待迁移完成）
 - 对复杂数据结构（链表、树等）尤其方便
 
 **缺点：**
-- **Page Fault 开销**：首次访问会导致显著的性能损失
+- **Page Fault 开销**：未预取时首次访问会导致显著的性能损失
 - **细粒度迁移效率低**：不适合频繁在小块数据上来回迁移
-- **缺少手动优化**：开发者无法控制数据传输的时机
+- **需要理解迁移策略**：默认策略不总是最优，通常需要配合预取和访问建议
+
+### 显式管理迁移：prefetch 与 advise
+
+CUDA 提供了控制迁移时机和放置位置的 API，弥补"全自动"策略的不足：
+
+```cuda
+// 在 kernel 启动前把数据预取到 GPU（异步，可放入 stream）
+cudaMemPrefetchAsync(x, N * sizeof(float), deviceId, stream);
+
+// 告诉驱动：该区域主要由 GPU 读取（避免重复迁移）
+cudaMemAdvise(x, N * sizeof(float), cudaMemAdviseSetReadMostly, deviceId);
+
+// 指定某设备为该区域的"首选位置"
+cudaMemAdvise(x, N * sizeof(float), cudaMemAdviseSetPreferredLocation, deviceId);
+
+// 允许某设备直接远程访问（不迁移），适合只读共享
+cudaMemAdvise(x, N * sizeof(float), cudaMemAdviseSetAccessedBy, deviceId);
+```
+
+在现代系统上，统一内存已是**可用于生产**的技术：Grace Hopper 的 CPU-GPU 一致地址空间、HMM（Heterogeneous Memory Management）与 ATS（Address Translation Services）都建立在其之上。关键在于用预取/建议把"缺页驱动"的被动迁移变成可预测的主动迁移。
 
 ### 性能对比
 
@@ -235,7 +255,7 @@ Kernel 继续执行（等待迁移完成）
 |------|----------|----------------|
 | 一次性大块拷贝 | 快（直接 DMA） | 类似（触发批量迁移） |
 | 多次小数据访问 | 快（开发者控制） | 慢（每次可能有 Page Fault） |
-| 复杂数据结构 | 困难（需要手动序列化） | 方便（零拷贝语义） |
+| 复杂数据结构 | 困难（需要手动序列化） | 方便（统一指针，无需手动序列化） |
 | 代码可读性 | 需要显式 cudaMemcpy | 简洁 |
 
 ### 何时使用 Unified Memory
@@ -246,9 +266,8 @@ Kernel 继续执行（等待迁移完成）
 - 稀疏访问模式（不是所有数据都需要）
 
 **不适合：**
-- 性能关键的生产环境代码
-- 需要在 Host 和 Device 之间高频来回访问
-- 追求极限带宽的应用
+- 需要在 Host 和 Device 之间高频、细粒度来回访问且未做预取
+- 追求极限带宽、且数据布局固定的应用（显式拷贝 + 双缓冲通常更可控）
 
 ## Memory 操作的性能建议
 
@@ -265,7 +284,7 @@ cudaHostAlloc((void**)&h_a, N * sizeof(float), cudaHostAllocDefault);
 // 或者使用 POSIX 函数: mlock(h_a, N * sizeof(float));
 ```
 
-Pinned Memory 提升了 H2D/D2H 传输带宽（允许 GPU DMA 直接访问），但占用系统物理内存（不可交换）。
+Pinned Memory 提升了 H2D/D2H 传输带宽：页面被锁定在物理内存中、不会被换出，GPU 的 DMA 引擎可以直接访问；普通 pageable 内存则需要驱动先做暂存拷贝，或在支持 IOMMU 的系统中建立地址映射。代价是锁定期间占用系统物理内存（不可交换）。
 
 ## 总结
 
@@ -273,10 +292,10 @@ Pinned Memory 提升了 H2D/D2H 传输带宽（允许 GPU DMA 直接访问），
 |------|------|
 | Host vs Device | 独立内存域，需要通过拷贝或 UM 交换数据 |
 | 显式管理 | cudaMalloc / cudaMemcpy / cudaFree |
-| 内存层次 | Register < Shared < Global（速度递增 -> 递减） |
+| 内存层次 | Register > Shared > Global（速度递减，容量递增） |
 | Coalesced Access | 对齐的连续访问是达到峰值带宽的关键 |
 | Shared Memory | 片上 SRAM，Block 内协作的利器 |
-| Unified Memory | 方便但可能牺牲性能 |
+| Unified Memory | 方便；配合预取/建议可用于生产，放任缺页则性能下降 |
 
 ## 参考文献
 

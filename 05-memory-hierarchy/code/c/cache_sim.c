@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <limits.h>
 #include <unistd.h>
 
 /* ===================================================================
@@ -220,6 +221,12 @@ cache_stats(const cache_t *c)
  * print_usage — show command-line syntax
  * =================================================================== */
 
+static int
+is_power_of_two(int x)
+{
+    return (x > 0) && ((x & (x - 1)) == 0);
+}
+
 static void
 print_usage(const char *prog)
 {
@@ -258,7 +265,65 @@ main(int argc, char **argv)
     }
 
     if (size_kb <= 0 || assoc <= 0 || line_size <= 0) {
+        fprintf(stderr, "Error: -s, -a and -l must all be positive.\n");
         print_usage(argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    /* ---- Validate the geometry before allocating anything ----
+     * The simulator extracts index/tag bits with shifts, so line_size,
+     * num_lines and num_sets must all be powers of two.  Without these
+     * checks, e.g. `-s 1 -a 64 -l 64` computes num_sets == 0 and then
+     * dereferences cache[0], crashing with SIGSEGV.
+     */
+    long long cache_bytes_ll = (long long)size_kb * 1024;
+    if (cache_bytes_ll > INT_MAX) {
+        fprintf(stderr, "Error: cache size too large.\n");
+        return EXIT_FAILURE;
+    }
+    int cache_bytes = (int)cache_bytes_ll;
+
+    if (!is_power_of_two(line_size)) {
+        fprintf(stderr, "Error: line size (%d) must be a power of two.\n",
+                line_size);
+        return EXIT_FAILURE;
+    }
+    if (line_size > (1 << 20)) {
+        fprintf(stderr, "Error: line size (%d) is unreasonably large.\n",
+                line_size);
+        return EXIT_FAILURE;
+    }
+    if (cache_bytes % line_size != 0) {
+        fprintf(stderr,
+                "Error: cache size (%d B) must be a multiple of line size (%d B).\n",
+                cache_bytes, line_size);
+        return EXIT_FAILURE;
+    }
+
+    int num_lines = cache_bytes / line_size;
+    if (assoc > num_lines) {
+        fprintf(stderr,
+                "Error: associativity (%d) exceeds the number of cache lines (%d).\n",
+                assoc, num_lines);
+        return EXIT_FAILURE;
+    }
+    if (!is_power_of_two(assoc)) {
+        fprintf(stderr, "Error: associativity (%d) must be a power of two.\n",
+                assoc);
+        return EXIT_FAILURE;
+    }
+    if (num_lines % assoc != 0) {
+        fprintf(stderr,
+                "Error: number of lines (%d) must be divisible by associativity (%d).\n",
+                num_lines, assoc);
+        return EXIT_FAILURE;
+    }
+
+    int num_sets = num_lines / assoc;
+    if (num_sets <= 0 || !is_power_of_two(num_sets)) {
+        fprintf(stderr,
+                "Error: number of sets (%d) must be a positive power of two.\n",
+                num_sets);
         return EXIT_FAILURE;
     }
 

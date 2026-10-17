@@ -153,7 +153,7 @@ ptxas info: Used 32 registers, 4096 bytes smem
    - 推荐值：128、256、512
    - 总是 32 的倍数，避免 Warp 浪费
 
-2. **每个 SM 至少 4-6 个 Active Warp**
+2. **每个调度器至少 4-6 个 Active Warp（即每 SM 16-24 个）**
    - 足够覆盖指令延迟和内存延迟
    - 计算密集型 kernel 可以接受更低 Occupancy
 
@@ -196,11 +196,16 @@ __global__ void matmul_kernel(float *A, float *B, float *C,
     
     int row = blockIdx.y * TILE_SIZE + threadIdx.y;
     int col = blockIdx.x * TILE_SIZE + threadIdx.x;
+    bool valid = (row < M && col < N);
     
     float sum = 0.0f;
-    for (int t = 0; t < K / TILE_SIZE; t++) {
-        As[threadIdx.y][threadIdx.x] = A[row * K + t * TILE_SIZE + threadIdx.x];
-        Bs[threadIdx.y][threadIdx.x] = B[(t * TILE_SIZE + threadIdx.y) * N + col];
+    for (int t = 0; t < (K + TILE_SIZE - 1) / TILE_SIZE; t++) {
+        int a_col = t * TILE_SIZE + threadIdx.x;
+        int b_row = t * TILE_SIZE + threadIdx.y;
+        As[threadIdx.y][threadIdx.x] =
+            (row < M && a_col < K) ? A[row * K + a_col] : 0.0f;
+        Bs[threadIdx.y][threadIdx.x] =
+            (b_row < K && col < N) ? B[b_row * N + col] : 0.0f;
         __syncthreads();
         
         for (int k = 0; k < TILE_SIZE; k++) {
@@ -208,7 +213,7 @@ __global__ void matmul_kernel(float *A, float *B, float *C,
         }
         __syncthreads();
     }
-    C[row * N + col] = sum;
+    if (valid) C[row * N + col] = sum;
 }
 // 调用: matmul_kernel<<<grid, dim3(TILE_SIZE, TILE_SIZE)>>>(...)
 // Block Size: 256
@@ -264,7 +269,7 @@ Occupancy = 64 / 64 = 100%
 CUDA 提供运行时 API 来计算 Occupancy，无需手动计算：
 
 ```cuda
-int min_grid_size, block_size;
+int min_grid_size, block_size, num_blocks;
 
 // 1. 给定 block size 下的最大 active blocks
 cudaOccupancyMaxActiveBlocksPerMultiprocessor(
@@ -292,6 +297,8 @@ cudaOccupancyMaxPotentialBlockSize(
 | 共享内存 / Block | 每个 Block 需要的共享内存 | 减少共享内存或重构 kernel |
 | Block Size | 线程块中的线程数 | 选择 32 的倍数，128-512 为宜 |
 | Grid Size | Grid 中的 Block 数 | 至少 SM 数量的数倍 |
+
+补充：Occupancy 只决定"有多少 warp 可供调度"，并不直接等于性能。对于短小、频繁启动的 kernel，启动开销和内存分配开销可能比 Occupancy 更关键——此时可使用 **CUDA Graphs** 合并多次启动，或用 `cudaMallocAsync`/内存池复用显存分配。
 
 ## 参考文献
 

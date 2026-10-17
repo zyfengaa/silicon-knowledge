@@ -50,7 +50,7 @@ LPU 核心的资源:
 │   ├── 矩阵乘累加矩阵（类似 NVIDIA Tensor Core）
 │   └── 专为 AI 运算优化
 ├── 内存单元 (Memory Unit)
-│   ├── 分布式 SRAM（~200 MB+）
+│   ├── 分布式 SRAM（230 MB）
 │   └── 显式 DMA 控制
 └── 互联交换机（Switch）
     └── 确定性片上网络
@@ -58,11 +58,11 @@ LPU 核心的资源:
 
 ### 2.2 片上 SRAM
 
-LPU 拥有 200+ MB 的片上 SRAM，分布在所有功能单元中：
+LPU 拥有 230 MB 的片上 SRAM，分布在所有功能单元中：
 
 ```
 对比:
-LPU:      ~200 MB 片上 SRAM  → 模型参数和中间结果都可存放
+LPU:      230 MB 片上 SRAM  → 模型参数和中间结果都可存放
 GPU:      ~40 MB L2 cache    → 依赖高带宽 HBM
 
 Groq 的权衡: 用更多芯片面积做 SRAM，替换复杂的分支预测/OOO 逻辑
@@ -118,11 +118,13 @@ GPU:    指令流 → Warp 调度器 → 执行
 LPU:    时间表 → 每个周期所有单元执行预定的操作
 
 不需要:
-- 取指和译码（调度已在编译时完成）
+- 动态调度（调度已在编译时完成）
 - 分支预测（没有条件分支）
 - 乱序执行（顺序由编译器决定）
 - 缓存一致性（没有 cache）
 ```
+
+需要说明的是，LPU 仍然要取指和译码：指令由 Instruction Control Unit（ICU）从指令存储器取出并译码，只是执行时序、数据流和功能单元分配在编译时已经确定，硬件不做动态调度。因此“完全不需要取指/译码”的说法是不准确的。
 
 ### 数据流执行
 
@@ -143,20 +145,20 @@ LPU:    时间表 → 每个周期所有单元执行预定的操作
 | 特性 | LPU | NVIDIA H100 |
 |------|-----|-------------|
 | 时序行为 | 完全确定 | 统计（缓存/调度影响） |
-| 峰值 FP32 TFLOPS | ~200 | ~67 |
-| 推理延迟 | 极低（ns 级确定性） | 较低（μs 级） |
+| 峰值算力 | 188 TFLOPS (FP16)；FP32 更低 | 67 TFLOPS (FP32)；FP16 Tensor Core 约 989 TFLOPS (dense, SXM) |
+| 推理延迟 | 芯片内周期级确定；端到端仍为 μs 级 | 较低（μs 级） |
 | 存储层次 | 完全显式 SRAM | HBM + cache 层次 |
 | 编译器角色 | 核心（调度一切） | 重要（但硬件也做决策） |
 | 推理批次 | 小批次效率极高 | 大批次利用 Tensor Core |
-| 功耗 | ~185W (LPU) | ~700W (H100) |
+| 功耗 | 215 W TDP（平均约 185 W，最大 300 W） | ~700W (H100) |
 
 ### 关键指标：时延一致性
 
-对于推理场景，**P99 延迟**可能比平均延迟更重要：
+对于推理场景，**P99 延迟**可能比平均延迟更重要。LPU 的编译时调度可以减少芯片内的时序抖动，但端到端延迟仍包含主机、网络、批处理和光电转换等环节，不能简单说成“ns 级确定性”。
 
 ```
-GPU 推理延迟分布:  10μs (avg), 100μs (P99)   ← 缓存缺失+Warp 调度波动
-LPU 推理延迟分布:  1μs (avg), 1.01μs (P99)   ← 完全确定性
+LPU 的优势在于芯片内时序可预测；
+P99 与平均延迟的差距主要取决于主机/网络/批处理策略，需实测，不能套用固定分布。
 ```
 
 ---
@@ -182,7 +184,7 @@ LPU 推理延迟分布:  1μs (avg), 1.01μs (P99)   ← 完全确定性
 ## 参考文献
 
 1. Groq. (2020). "Groq Architecture Whitepaper." *Groq Inc.*
-2. Jouppi, N. P., et al. (2020). "A Domain-Specific Supercomputer for Training Deep Neural Networks." *ISCA 2020*.
+2. Groq. (2024). "GroqChip Product Brief." *Groq Inc.*
 3. Abts, D., et al. (2020). "Think Fast: A Tensor Streaming Processor for Accelerating Deep Learning Workloads." *ISCA 2020*.
 4. Groq. (2020). "Groq Compiler: Scheduling for Deterministic Execution." *Hot Chips 32*.
 5. Abts, D., et al. (2022). "The Groq Software-Defined Hardware Architecture." *IEEE Micro*, 42(3).

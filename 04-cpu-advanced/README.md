@@ -11,14 +11,14 @@
 | 01 | **超标量** | 多发射架构：每周期发射多条指令的限制因素 |
 | 02 | **乱序执行** | 重排序缓冲（ROB）、保留站（Reservation Station）、寄存器重命名 |
 | 03 | **推测执行** | 分支预测后如何"推测性"执行指令，以及误预测回滚机制 |
-| 04 | **分支预测** | 从 2-bit 饱和计数器到 TAGE：现代预测器为什么能 >97% 准确 |
+| 04 | **分支预测** | 从 2-bit 饱和计数器到 TAGE：现代预测器如何把准确率做到 95%+（依负载而异） |
 | 05 | **SIMD** | SSE/AVX/NEON/SVE 的原理、向量化编程、与标量的性能对比 |
 | 06 | **多核与缓存一致性** | MESI 协议、False Sharing 问题、NUMA 架构 |
 | 07 | **现代 CPU 实例** | Apple M 系列、Intel Golden Cove、AMD Zen 4/5 架构解读 |
 
 ## 前置知识
 
-- [03 CPU 流水线](/03-cpu-pipeline/)（流水线冒险、转发、CPI 计算）
+- [03 CPU 流水线](../03-cpu-pipeline/)（流水线冒险、转发、CPI 计算）
 
 ## 建议学习方式
 
@@ -32,10 +32,10 @@
 
 | 文件 | 内容 | 运行环境 |
 |------|------|---------|
-| `c/simd_add.c` | SIMD 向量加法示例 | x86 CPU with AVX |
-| `c/simd_vs_scalar.c` | SIMD vs 标量性能对比 + 时间测量 | x86 CPU |
+| `c/simd_add.c` | SSE（128-bit）向量加法示例 | x86 CPU with SSE |
+| `c/simd_vs_scalar.c` | AVX vs 标量点积性能对比 + 时间测量 | x86 CPU with AVX2/FMA |
 | `c/false_sharing.c` | False Sharing 现象复现与优化对比 | 多核 CPU |
-| `python/branch_pred_sim.py` | 不同分支预测策略（2-bit / 两级）的模拟对比 | Python |
+| `python/branch_pred_sim.py` | 分支预测策略（Always Taken / Always Not-Taken / 2-bit）的模拟对比 | Python |
 
 ## 关键产出
 

@@ -95,13 +95,13 @@ Addressing modes specify how to compute the memory address of an operand.
 
 | Mode                  | Effective Address      | Example (RISC-V)  |
 |-----------------------|------------------------|--------------------|
-| Register              | `R[rs1]`               | `add x1, x2, x3`  |
-| Immediate             | value encoded          | `addi x1, x2, 5`  |
+| Register operand      | no memory access; operand is `R[rs]` | `add x1, x2, x3`  |
+| Immediate             | no memory access; operand is the encoded constant | `addi x1, x2, 5`  |
 | Base+Offset           | `R[rs1] + imm`         | `lw x1, 8(x2)`    |
-| PC-relative           | `PC + imm`             | `beq x1, x2, off` |
-| Register indirect     | `M[R[rs1]]`            | `jalr x1, 0(x2)`  |
+| PC-relative           | `PC + imm` (branch/jump target) | `beq x1, x2, off` |
+| Register indirect     | `R[rs1] + 0` (base+offset with imm = 0) | `lw x1, 0(x2)` |
 
-RISC-V deliberately keeps addressing modes simple, using only register, immediate, and base+offset for memory operations.
+RISC-V deliberately keeps addressing modes simple: memory operations use only base+offset (register indirect is just the special case with imm = 0), while branches and jumps use PC-relative or `rs1 + imm` targets.
 
 ### Key Concepts Summary
 

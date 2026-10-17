@@ -12,9 +12,9 @@
 
 | 依赖 | 含义 | 在 5 级流水线中 |
 |------|------|----------------|
-| **RAW** | 读后写：指令 j 读一个由指令 i 写入的寄存器 | **需要处理** |
-| **WAR** | 写后读：指令 j 写一个指令 i 将要读的寄存器 | 不会出现（？？？说明见下方） |
-| **WAW** | 写后写：指令 j 和指令 i 写同一个寄存器 | 不会出现（？） |
+| **RAW** | 读后写（Read After Write）：指令 j 读一个由指令 i 写入的寄存器 | **需要处理** |
+| **WAR** | 写后读（Write After Read）：指令 j 写一个指令 i 将要读的寄存器 | 不会出现（说明见下方） |
+| **WAW** | 写后写（Write After Write）：指令 j 和指令 i 写同一个寄存器 | 不会出现 |
 
 **为什么 WAR 和 WAW 在按序流水线中不影响？**
 
@@ -91,8 +91,8 @@ sub x4, x1, x5    # R[4] ← R[1] - R[5]
 ```
 周期:   1      2      3      4      5      6      7
 add:   IF    ID    EX    MEM    WB
-sub:         IF    ID    ---   EX    MEM    WB
-                      ↑ stall: sub 等待 add WB 后读 x1
+sub:         IF    ID    ---   ---    EX    MEM    WB
+                      ↑ stall: sub 在 ID 等待，直到 add 写回
 ```
 
 **有转发时的执行流程：**
@@ -105,7 +105,7 @@ sub:         IF    ID    EX    MEM    WB
                         add 在 EX 阶段计算的 ALU 结果
 ```
 
-转发避免了 1 个停顿周期。
+在经典的 5 级流水线中，ALU-ALU 的 RAW 依赖在没有转发时需要 **2 个停顿周期**（sub 要等到 add 的 WB 之后才能安全读到寄存器值）；有转发时不需要停顿。
 
 ### 2.4 转发控制逻辑
 
@@ -163,10 +163,11 @@ add:         IF    ID    ---   EX    MEM    WB
 ### 3.2 Load-Use 冒险的检测
 
 ```python
-# 在 ID 阶段检测
-if (ID/EX.MemRead == 1                  # 前一条指令是 lw
-    and ID/EX.rd == IF/ID.rs1           # 需要读 lw 的目标寄存器
-    or ID/EX.rd == IF/ID.rs2):          # 需要读 lw 的目标寄存器
+# 在 ID 阶段检测（注意运算符优先级，并排除 x0）
+if (ID/EX.MemRead == 1
+    and ID/EX.rd != 0
+    and (ID/EX.rd == IF/ID.rs1
+         or ID/EX.rd == IF/ID.rs2)):
     stall_pipeline()                    # 插入一个气泡
 ```
 
@@ -191,11 +192,13 @@ or   x6, x7, x8
 周期 1: IF = lw         ID = —        EX = —        MEM = —       WB = —
 周期 2: IF = add        ID = lw       EX = —        MEM = —       WB = —
 周期 3: IF = or         ID = add      EX = lw       MEM = —       WB = —
-周期 4: IF = or(重取)   ID = bubble   EX = add      MEM = lw      WB = —
-                                      ↑ stall bubble
-周期 5: IF = next       ID = or       EX = bubble   MEM = add     WB = lw
-周期 6: IF = ...        ID = next     EX = or       MEM = bubble  WB = add
-                        （add 现在得到来自 MEM/WB 的转发值）
+周期 4: IF = or(保持)   ID = add(保持) EX = bubble   MEM = lw      WB = —
+                                      ↑ 插入气泡
+周期 5: IF = next       ID = or       EX = add      MEM = bubble  WB = lw
+                                      ↑ add 在 EX 使用转发值
+周期 6: IF = ...        ID = next     EX = or       MEM = add     WB = bubble
+周期 7: ...             ...           EX = next     MEM = or      WB = add
+周期 8: ...             ...           ...           MEM = next     WB = or
 ```
 
 ### 3.4 编译器调度优化
@@ -252,15 +255,15 @@ sub x4, x1, x5    # 转发解决，0 停顿
 lw  x1, 0(x2)
 add x4, x1, x5    # load-use，1 停顿
 
-sw  x1, 0(x2)     # 不是 load-use（sw 写存储器，不是读寄存器）
+sw  x1, 0(x2)     # sw 读取基址寄存器 rs1 和源数据寄存器 rs2；它不写寄存器
                    # 但如果是：
 lw  x1, 0(x2)
-sw  x1, 0(x3)     # 实际上 sw 在 ID 阶段读 x1，EX 阶段计算地址
-                   # lw 结果在 MEM 末可用，sw 的 ID 需要 x1
-                   # 需要停顿！（lw→sw 也是 load-use）
+sw  x1, 0(x3)     # sw 需要 x1 作为写入存储器的数据
+                   # 若没有 MEM/WB → DMEM 的存储数据转发通路，需要停顿；
+                   # 若有该转发通路，lw 的结果可从 MEM/WB 直接送到存储数据输入
 ```
 
-> lw 之后的 sw 同样需要停顿，因为 sw 在 ID 阶段需要读取 lw 的目标寄存器值用于写入存储器，而 lw 的结果直到 MEM 末才可用。
+> 因此，lw→sw 是否需要停顿取决于数据通路：有存储数据转发时通常不需要停顿，没有该通路时才需要停顿。
 
 ### 4.3 典型 CPI 估算
 
@@ -285,7 +288,7 @@ add x1, x2, x3
 add x1, x1, x4    # RAW，x1 既是源又是目标
 ```
 
-转发单元会检测到 ID/EX.rd == ID/EX.rs1，将 EX/MEM 的结果转发给 ALU 输入。这可以正常工作。
+转发单元会检测到 **EX/MEM.rd == ID/EX.rs1**，将 EX/MEM 的结果转发给 ALU 输入。这可以正常工作（x1 既是源又是目标，转发的是前一条指令产生的最新值）。
 
 ### 5.2 多级转发
 

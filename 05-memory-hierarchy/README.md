@@ -19,7 +19,7 @@
 
 ## 前置知识
 
-- [02 ISA 与 CPU 基本组成](/02-isa-and-cpu-basics/)（程序执行的基本流程）
+- [02 ISA 与 CPU 基本组成](../02-isa-and-cpu-basics/)（程序执行的基本流程）
 
 ## 建议学习方式
 
@@ -33,15 +33,18 @@
 
 | 文件 | 内容 | 运行环境 |
 |------|------|---------|
-| `c/cache_sim.c` | 缓存模拟器：可配置大小/关联度/行大小/替换策略 | GCC |
-| `c/matrix_mult_tiling.c` | 朴素 vs 分块矩阵乘，对比分块对缓存利用的影响 | GCC |
-| `python/cache_analysis.py` | 缓存性能分析可视化：命中率 vs 工作集大小曲线 | Python |
+| `code/c/cache_sim.c` | 缓存模拟器：可配置大小/相联度/行大小（LRU 替换；参数非法时报错退出） | GCC |
+| `code/c/matrix_mult_tiling.c` | 朴素 ijk vs 分块 ikj 矩阵乘，实测对比不同分块大小 | GCC |
+| `code/python/cache_analysis.py` | **轨迹驱动仿真**：用冲突型步长访问展示相联度如何推迟冲突缺失 | Python |
+| `python/cache_analysis.py` | **解析/参数化模型**（非仿真）：用 logistic 曲线示意命中率趋势 | Python |
+
+> `code/python/cache_analysis.py` 会实际模拟每一次访问，命中率来自仿真统计；`python/cache_analysis.py` 只是示意性的数学模型，曲线形状由公式决定，不能当作实测结果。两者都会把图保存到脚本所在目录（无显示环境时自动使用 Agg 后端，不会阻塞）。
 
 ## 关键产出
 
 - [ ] 能画出典型 CPU 的存储层次图（标注每层大小、延迟、带宽）
 - [ ] 能手工计算缓存索引、标记（Tag）和偏移量的划分
-- [ ] 能通过分块（Tiling）优化矩阵乘达到 ~10× 的速度提升
+- [ ] 能用分块（Tiling）优化矩阵乘获得数倍加速（实测倍数依分块大小、编译器和平台而定）
 - [ ] 能解释 TLB 缺失的代价为什么比缓存缺失更大
 - [ ] 能描述 DRAM 读一次数据经历的完整时序
 

@@ -4,7 +4,7 @@
 
 ## 为什么要用厂商优化库
 
-NVIDIA 为每一代 GPU 架构（Volta、Turing、Ampere、Hopper）重新优化 cuBLAS 和 cuDNN：
+NVIDIA 为每一代 GPU 架构（Volta、Turing、Ampere、Hopper、Blackwell）重新优化 cuBLAS 和 cuDNN：
 
 1. **每个 GPU 的代际调优**：不同架构有不同数量的 SM、寄存器、共享内存，最优的 Tile Size 和 Launch Configuration 也不同
 2. **手写汇编**：核心 Kernel 由 NVIDIA 工程师手写 PTX/汇编（如 CUTLASS 生成的代码）
@@ -34,9 +34,9 @@ cublasCreate(&handle);
 
 // 2. 准备数据（Device 端）
 float *d_A, *d_B, *d_C;
-cudaMalloc(&d_A, M * K * sizeof(float));
-cudaMalloc(&d_B, K * N * sizeof(float));
-cudaMalloc(&d_C, M * N * sizeof(float));
+cudaMalloc((void**)&d_A, M * K * sizeof(float));
+cudaMalloc((void**)&d_B, K * N * sizeof(float));
+cudaMalloc((void**)&d_C, M * N * sizeof(float));
 // ... cudaMemcpy Host → Device ...
 
 // 3. 调用 cuBLAS 函数
@@ -184,6 +184,9 @@ cudnnSetTensor4dDescriptor(output_desc, CUDNN_TENSOR_NCHW,
                            CUDNN_DATA_FLOAT, out_n, out_c, out_h, out_w);
 
 // 5. 选择最快的卷积算法
+// 注意：cudnnGetConvolutionForwardAlgorithm_v7 属于 cuDNN 7/8 的旧接口，
+// 在 cuDNN 9 中已被移除或弃用；新代码应使用 cuDNN Frontend API，
+// 或用 cudnnFindConvolutionForwardAlgorithmEx 实测选择。
 cudnnConvolutionFwdAlgoPerf_t perf_results;
 int returned_algo_count;
 cudnnGetConvolutionForwardAlgorithm_v7(
@@ -194,8 +197,8 @@ cudnnGetConvolutionForwardAlgorithm_v7(
     &perf_results
 );
 cudnnConvolutionFwdAlgo_t algo = perf_results.algo;
-// 或使用以下 API 自动寻找最佳算法:
-// cudnnFindConvolutionForwardAlgorithm(...)
+// cuDNN 8 可用 cudnnFindConvolutionForwardAlgorithmEx 实测多个算法
+// cuDNN 9 推荐使用 cudnn_frontend::EngineConfigGenerator
 
 // 6. 分配工作空间
 size_t workspace_size;
@@ -205,7 +208,7 @@ cudnnGetConvolutionForwardWorkspaceSize(
     &workspace_size
 );
 void *workspace;
-cudaMalloc(&workspace, workspace_size);
+cudaMalloc((void**)&workspace, workspace_size);
 
 // 7. 执行卷积
 float alpha = 1.0f, beta = 0.0f;
@@ -241,7 +244,7 @@ cuDNN 卷积支持多种实现算法，性能差异很大（可到数倍）。
 | `CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD` | Winograd 变换 | 小 kernel (3x3, 5x5) |
 | `CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM` | 隐式矩阵乘 | 通用情况 |
 
-**最佳实践：** 使用 `cudnnFindConvolutionForwardAlgorithm`（或 TensorRT 的自动调优）来为你的特定尺寸和硬件选择最快算法。
+**最佳实践：** 在 cuDNN 8 中使用 `cudnnFindConvolutionForwardAlgorithmEx` 实测候选算法；在 cuDNN 9 中使用 **cuDNN Frontend**（`cudnn_frontend::EngineConfigGenerator`）或启发式接口。TensorRT 也会在构建阶段自动调优。
 
 ### Batch Norm 示例
 
@@ -287,7 +290,7 @@ cublasGemmEx(handle,
 cudnnSetConvolutionMathType(conv_desc, CUDNN_TENSOR_OP_MATH);
 ```
 
-Tensor Cores 在 Volta 及之后架构可用，Hopper 架构达到最佳效率。
+Tensor Cores 在 Volta 及之后架构可用；cuBLAS/cuDNN 会针对 Hopper 的 WGMMA 和 Blackwell 的 tcgen05 生成专用 kernel，因此在新架构上通常能获得最佳效率。
 
 ## 何时使用 cuBLAS/cuDNN vs 自己写 Kernel
 

@@ -51,8 +51,10 @@ def four_bit_ripple_carry_adder(a3, a2, a1, a0, b3, b2, b1, b0):
     print(f"  Full: {c4}{s3}{s2}{s1}{s0}")
     print(f"  Decimal: {av} + {bv} = {result} (expected {total})")
 
-    overflow = c3 ^ c4
-    print(f"  Overflow: c3={c3}, c4={c4} -> {'OVERFLOW' if overflow else 'none'}")
+    signed_overflow = c3 ^ c4
+    unsigned_overflow = c4
+    print(f"  Unsigned overflow (carry-out c4={c4}): {'OVERFLOW' if unsigned_overflow else 'none'}")
+    print(f"  Signed overflow (c3 XOR c4 = {signed_overflow}): {'OVERFLOW' if signed_overflow else 'none'}")
 
     return ((s3, s2, s1, s0), c4)
 
@@ -110,8 +112,8 @@ if __name__ == "__main__":
 
     adder_chain(7, 5)     # 7 + 5 = 12
     adder_chain(3, 8)     # 3 + 8 = 11
-    adder_chain(11, 6)    # 11 + 6 = 17 (overflow)
+    adder_chain(11, 6)    # 11 + 6 = 17 (unsigned overflow; signed 11 + 6 does not overflow)
     adder_chain(0, 0)     # 0 + 0 = 0
-    adder_chain(15, 1)    # 15 + 1 = 16 (overflow)
+    adder_chain(15, 1)    # 15 + 1 = 16 (unsigned overflow; signed 15 + 1 does not overflow)
 
     print("\nAll demonstrations complete.")

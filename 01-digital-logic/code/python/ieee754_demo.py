@@ -30,7 +30,10 @@ def analyze_ieee754(value: float):
     if biased_exp == 0:
         leading_bit = 0
         effective_exp = -126
-        classification = "Denormalized"
+        if mantissa_bits == 0:
+            classification = "Zero"
+        else:
+            classification = "Denormalized"
     elif biased_exp == 255:
         if mantissa_bits == 0:
             classification = "Infinity"
@@ -58,7 +61,15 @@ def analyze_ieee754(value: float):
     print(f"  Binary: {exponent_bits:08b}")
     print(f"  Hex:    0x{exponent_bits:02X}")
     print(f"  Decimal (biased):   {biased_exp}")
-    print(f"  Decimal (unbiased): E - 127 = {biased_exp} - 127 = {unbiased_exp}")
+    if biased_exp == 0:
+        if classification == "Zero":
+            print("  Effective exponent: N/A (zero)")
+        else:
+            print("  Effective exponent: -126 (subnormal formula; encoded E = 0)")
+    elif biased_exp == 255:
+        print("  Effective exponent: N/A (Infinity/NaN)")
+    else:
+        print(f"  Decimal (unbiased): E - 127 = {biased_exp} - 127 = {unbiased_exp}")
 
     print(f"\n--- Mantissa (Significand) ---")
     print(f"  Binary (23 bits): {mantissa_bits:023b}")
@@ -79,6 +90,8 @@ def analyze_ieee754(value: float):
         print(f"  Difference: {abs(reconstructed - value)}")
     elif classification == "Infinity":
         print(f"  {sign_str}Infinity")
+    elif classification == "Zero":
+        print(f"  Signed zero: {sign_str}0")
     elif classification == "NaN":
         print(f"  NaN (payload: 0x{mantissa_bits:06X})")
 
@@ -109,14 +122,33 @@ def show_special_values():
 
 
 def show_precision_issue():
-    """Demonstrate that 0.1 is not exact."""
+    """Demonstrate that 0.1 is not exact.
+
+    注意：Python 3.12+ 的内建 sum() 对浮点使用补偿求和，会把 0.1 累加
+    十次直接舍入成 1.0，无法展示误差。这里用显式循环分别演示单精度
+    （float32）和双精度（float64）的累加结果。
+    """
+    def f32(x):
+        return struct.unpack('>f', struct.pack('>f', x))[0]
+
     print("\n" + "=" * 65)
     print("Precision Demo: Why 0.1 is not exact")
     print("=" * 65)
-    sum_10 = sum(0.1 for _ in range(10))
-    print(f"\n  0.1 + ... + 0.1 (10 times) = {sum_10}")
-    print(f"  Exact decimal:              1.0")
-    print(f"  Error:                      {sum_10 - 1.0}")
+
+    sum_f32 = 0.0
+    for _ in range(10):
+        sum_f32 = f32(sum_f32 + f32(0.1))
+    sum_f64 = 0.0
+    for _ in range(10):
+        sum_f64 += 0.1
+
+    print("\n  float32 (IEEE 754 single precision):")
+    print(f"    0.1 + ... + 0.1 (10 times) = {sum_f32!r}")
+    print(f"    Error vs 1.0:               {sum_f32 - 1.0!r}")
+    print("\n  float64 (IEEE 754 double precision):")
+    print(f"    0.1 + ... + 0.1 (10 times) = {sum_f64!r}")
+    print(f"    Error vs 1.0:               {sum_f64 - 1.0!r}")
+    print("\n  两者都不等于精确的 1.0：0.1 的二进制表示是无限循环小数。")
 
 
 def interactive_mode():
@@ -133,7 +165,8 @@ def interactive_mode():
 
 
 if __name__ == "__main__":
-    demo_values = [0.0, 1.0, -1.0, 5.75, 0.1, 3.14159265, 42.0]
+    demo_values = [0.0, -0.0, 1.0, -1.0, 5.75, 0.1, 3.14159265, 42.0,
+                   1.40129846e-45]  # smallest positive single-precision subnormal
 
     for v in demo_values:
         analyze_ieee754(v)

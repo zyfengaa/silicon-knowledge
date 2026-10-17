@@ -65,7 +65,11 @@ def generate_data(
     b_true = rng.normal(0, 0.5, size=(1,)).astype(np.float32)
 
     X = rng.normal(0, 1.0, size=(n_samples, n_features)).astype(np.float32)
-    y = X @ W_true + b_true + noise_std * rng.normal(0, 1.0, size=(n_samples, 1)).astype(np.float32)
+    # Keep y one-dimensional (n_samples,) so that (y_pred - y) does not
+    # broadcast into an (n_samples, n_samples) matrix.
+    y = (X @ W_true).flatten() + b_true[0] + noise_std * rng.normal(
+        0, 1.0, size=n_samples
+    ).astype(np.float32)
     return X, y, W_true.flatten(), b_true[0]
 
 
@@ -85,6 +89,36 @@ def mse_loss_jax(W: jnp.ndarray, b: jnp.ndarray, X: jnp.ndarray, y: jnp.ndarray)
 
 # Compute gradients using JAX's automatic differentiation
 loss_grad = grad(mse_loss_jax, argnums=(0, 1))  # grad w.r.t. W and b
+
+
+def check_gradients(
+    X: np.ndarray, y: np.ndarray, eps: float = 1e-3
+) -> float:
+    """Compare autodiff gradients with central finite differences.
+
+    Parameters are kept one-dimensional / scalar to match the shapes used by
+    the training loop: W is (n_features,), b is (1,).
+    """
+    X_jax = jnp.asarray(X)
+    y_jax = jnp.asarray(y)
+    W = jax.random.normal(jax.random.PRNGKey(0), (X.shape[1],)) * 0.1
+    b = jnp.zeros((1,))
+
+    dW, db = loss_grad(W, b, X_jax, y_jax)
+
+    # Sample a few coordinates rather than checking all 64+.
+    idx = np.linspace(0, W.shape[0] - 1, num=min(5, W.shape[0]), dtype=int)
+    max_err = 0.0
+    for i in idx:
+        e = jnp.zeros_like(W).at[i].set(eps)
+        fd = (mse_loss_jax(W + e, b, X_jax, y_jax)
+              - mse_loss_jax(W - e, b, X_jax, y_jax)) / (2 * eps)
+        max_err = max(max_err, float(jnp.abs(fd - dW[i])))
+
+    fd_b = (mse_loss_jax(W, b + eps, X_jax, y_jax)
+            - mse_loss_jax(W, b - eps, X_jax, y_jax)) / (2 * eps)
+    max_err = max(max_err, float(jnp.abs(fd_b - db[0])))
+    return max_err
 
 
 @jit
@@ -160,13 +194,10 @@ def train_jax(
     X_jax = jnp.array(X)
     y_jax = jnp.array(y)
 
-    # Initialise parameters
+    # Initialise parameters as 1-D W and shape-(1,) b, matching predict/loss.
     key = jax.random.PRNGKey(42)
-    W = jax.random.normal(key, (n_features, 1)) * 0.01
+    W = jax.random.normal(key, (n_features,)) * 0.01
     b = jnp.zeros((1,))
-
-    # Flatten for convenience
-    W = W.flatten()
 
     times: List[float] = []
     losses: List[float] = []
@@ -302,6 +333,7 @@ def main():
     )
     print(f"  True W[:4]: {W_true[:4]}")
     print(f"  True b:     {b_true:.4f}")
+    print(f"  Gradient check (max |autodiff - finite diff|): {check_gradients(X, y):.2e}")
     print()
 
     # ---- JAX Training ----
@@ -309,9 +341,8 @@ def main():
     key = jax.random.PRNGKey(42)
     X_jax = jnp.array(X)
     y_jax = jnp.array(y)
-    W = jax.random.normal(key, (N_FEATURES, 1)) * 0.01
+    W = jax.random.normal(key, (N_FEATURES,)) * 0.01
     b = jnp.zeros((1,))
-    W = W.flatten()
 
     # Warm-up compile
     W, b, _ = train_step_jit(W, b, X_jax, y_jax, LR)

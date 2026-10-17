@@ -101,7 +101,9 @@ int verify_result(const float *C, const float *A, const float *B, int n) {
             for (int k = 0; k < n; k++) {
                 expected += A[i * n + k] * B[k * n + j];
             }
-            if (fabsf(C[i * n + j] - expected) > 1e-2) {
+            // 使用相对误差：K=1024 次累加后 float 的舍入误差会累积
+            if (fabsf(C[i * n + j] - expected) >
+                1e-3f * fmaxf(1.0f, fabsf(expected))) {
                 printf("  Mismatch at [%d,%d]: got %f, expected %f\n",
                        i, j, C[i * n + j], expected);
                 return 0;
@@ -134,9 +136,9 @@ int main() {
 
     // 设备内存
     float *d_A, *d_B, *d_C;
-    cudaMalloc(&d_A, bytes);
-    cudaMalloc(&d_B, bytes);
-    cudaMalloc(&d_C, bytes);
+    cudaMalloc((void **)&d_A, bytes);
+    cudaMalloc((void **)&d_B, bytes);
+    cudaMalloc((void **)&d_C, bytes);
 
     cudaMemcpy(d_A, h_A, bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, h_B, bytes, cudaMemcpyHostToDevice);

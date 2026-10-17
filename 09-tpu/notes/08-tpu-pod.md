@@ -8,14 +8,14 @@
 
 ### 拓扑结构
 
-TPU v2 和 v3 Pod 采用二维 Torus 网格（2D Torus Mesh）拓扑方式连接。以 v3 Pod 为例，包含 256 个 TPU v3 芯片，排列为 $16 \times 16$ 的二维 Torus：
+TPU v2 和 v3 Pod 采用二维 Torus 网格（2D Torus Mesh）拓扑方式连接。以 v3 Pod 为例，包含 1,024 个 TPU v3 芯片，排列为 $32 \times 32$ 的二维 Torus（v2 Pod 为 256 芯片、$16 \times 16$）：
 
 - 每个芯片有 4 个互连接口：上（North）、下（South）、左（West）、右（East）
 - 每行末端的芯片通过绕回（wrap-around）链路连接到该行的第一个芯片，形成环形
 - 每列类似，末端的芯片通过绕回链路连接到该列顶部的芯片
 - 因此每个芯片在逻辑上与 4 个邻居直接相连
 
-每对芯片之间的直接链路在 v3 上提供约 200 GB/s 的双向带宽。这种拓扑的一个关键特性是任意两个芯片之间的最短距离不超过 15 跳（hop），即 $16/2 + 16/2 = 16$，实际为 $8 + 8 = 16$ 跳。
+在 2D Torus 中，任意两个芯片之间的最短距离至多为两个维度半长之和。对 1,024 芯片的 $32 \times 32$ Torus，最多为 $16 + 16 = 32$ 跳；对 256 芯片的 $16 \times 16$ 子切片，最多为 $8 + 8 = 16$ 跳。每条链路的单向带宽随代际提升（v2 约 32 GB/s、v3 约 64 GB/s 量级），不同资料对双向聚合带宽的口径不一，这里不写死具体聚合值。
 
 ### 梯度 All-Reduce 的高效通信
 
@@ -37,7 +37,7 @@ Ring All-Reduce 分为两个阶段：
 
 TPU v4 Pod 引入了一项重大创新：光学电路开关（OCS, Optical Circuit Switch）技术。OCS 使用微机电系统（MEMS, Micro-Electro-Mechanical Systems）控制的微小反射镜阵列来实现光纤之间的光路切换。OCS 的关键特性包括：
 
-- **低延迟**: 光路切换延迟在微秒量级，信号传输延迟近乎光速
+- **低延迟**: MEMS 光路切换本身约 ≤5 ms，含调度与链路训练的整体重配置约 10 ms 量级——是**毫秒级，不是微秒级**；建立光路后的信号传输延迟接近光速
 - **高带宽**: 每根光纤可承载数十 Tbps 的带宽
 - **无数据格式约束**: 透传任意编码格式的光信号
 - **功耗极低**: 相比电子交换机，OCS 的功耗可忽略不计
@@ -88,12 +88,18 @@ GSPMD（Generalized SPMD, 广义单程序多数据）是 Google 开发的自动�
 例如，对于以下 JAX 代码：
 
 ```python
-@partial(shard_map, mesh=mesh, spec_shard_map=schema)
+from functools import partial
+from jax.experimental.shard_map import shard_map
+from jax.sharding import PartitionSpec as P
+
+@partial(shard_map, mesh=mesh,
+         in_specs=(P(), P("x")), out_specs=P("x"))
 def forward(params, x):
+    # 每个设备只看到本地的 x 分片；跨设备求和需显式调用 jax.lax.psum
     return jnp.dot(x, params)
 ```
 
-GSPMD 会根据标注的网格（mesh）和分片规范自动插入 `all-reduce` 操作，确保矩阵乘法结果的正确性。
+需要区分两个 API：**GSPMD 的自动通信插入**适用于 `jax.jit` 配合分片标注（`in_shardings`/`out_shardings`，或在函数体内用 `with_sharding_constraint` 标注）的写法；而上面的 `shard_map` 要求显式写出每设备本地计算，并**手动插入**跨设备通信（如 `jax.lax.psum`、`jax.lax.all_gather`），不会由 GSPMD 自动补通信。
 
 ### 流水线与模型并行
 
@@ -108,13 +114,13 @@ TPU Pod 的拓扑结构直接影响这些并行策略的效率——良好的拓
 
 在数千个芯片的 Pod 中，故障是常态而非例外。TPU Pod 的软件栈支持：
 
-- **预emptive 检查点**: 定期保存模型状态到持久化存储
+- **抢占式（preemptive）与周期性检查点**: 定期保存模型状态到持久化存储，以应对抢占和硬件故障
 - **运行时重新配置**: 一个芯片故障后，OCS 可自动将故障芯片排除并重新配置拓扑
 - **弹性训练**: 通过调整数据并行度，在芯片数量变化时无需从头开始训练
 
 ## 参考文献
 
-1. Jouppi, N. P., et al. "A Domain-Specific Supercomputer for Training Deep Neural Networks." Proceedings of the 45th Annual International Symposium on Computer Architecture (ISCA '18), ACM, 2018.
+1. Jouppi, N. P., et al. "A Domain-Specific Supercomputer for Training Deep Neural Networks." *Communications of the ACM*, vol. 63, no. 7, 2020, pp. 67–78 (originally ISCA '18).
 2. Jouppi, N. P., et al. "TPU v4: An Optically Reconfigurable Supercomputer for Machine Learning with Hardware Support for Embeddings." Proceedings of the 50th Annual International Symposium on Computer Architecture (ISCA '23), ACM, 2023.
 3. Xu, Y., et al. "GSPMD: General and Scalable Parallelization for ML Computation Graphs." arXiv:2105.04663, 2021.
 4. Sergeev, A., & Del Balsamo, M. "Horovod: Fast and Easy Distributed Deep Learning in TensorFlow." arXiv:1802.05799, 2018.

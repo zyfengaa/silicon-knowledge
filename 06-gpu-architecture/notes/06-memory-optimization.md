@@ -196,13 +196,17 @@ __shared__ float s_data[256];
 // T0 → s_data[0]  (Bank 0)
 // T1 → s_data[2]  (Bank 2)
 // ...
-// T31 → s_data[62] (Bank 62 % 32 = 30)
-// 冲突情况：N 和 N+32 映射到同一 Bank
-// 实际：24 个不同 Bank 被访问，其中 8 个 Bank 有 2 路冲突
+// T15 → s_data[30] (Bank 30)
+// T16 → s_data[32] (Bank 0)  ← 与 T0 冲突
+// ...
+// T31 → s_data[62] (Bank 30) ← 与 T15 冲突
+// 实际：只用到 16 个偶数 Bank，每个 Bank 被 2 个线程访问 → 2 路冲突
 float val = s_data[threadIdx.x * 2];
 ```
 
 ```cuda
+__shared__ float s_data[1024];  // 索引最大到 31*32 = 992
+
 // ❌ 32 路 Bank Conflict：所有线程访问同一 Bank
 // T0 → s_data[0]  (Bank 0)
 // T1 → s_data[32] (Bank 0) ← 冲突！
@@ -230,16 +234,19 @@ float val = s_data[5];  // 所有线程读同一个地址 → 无冲突（广播
 通过添加额外的列来破坏步长规律：
 
 ```cuda
-// 无填充：列数为 32 的倍数 → 32 路 Bank Conflict
+// Bank 映射公式：bank = (row * width + col) % 32（行主序）
+
+// 无填充：列数 width = 32 是 Bank 数的倍数
 __shared__ float s_mat[32][32];
-// 访问 s_mat[tx][ty]：
-// 同一行在不同列 → (tx, 0): Bank=tx, (tx, 1): Bank=tx → 冲突
+// 访问 s_mat[tx][ty]（行 = tx，列 = ty）：
+// bank = (tx * 32 + ty) % 32 = ty
+// 一个 warp 内 tx = 0..31、ty 相同 → 所有线程落在同一个 Bank → 32 路冲突
 
 // 填充：列数设为 33 → Bank 分布被打散
 __shared__ float s_mat[32][33];  // 注意第二维是 33
 // 访问 s_mat[tx][ty]：
-// (tx, 0): Bank = tx % 32
-// (tx, 1): Bank = (33+tx) % 32 = (tx+1) % 32 → 不冲突!
+// bank = (tx * 33 + ty) % 32 = (tx + ty) % 32
+// 固定 ty 时 tx = 0..31 恰好覆盖 32 个不同 Bank → 无冲突
 ```
 
 **技巧 2：数据重排**

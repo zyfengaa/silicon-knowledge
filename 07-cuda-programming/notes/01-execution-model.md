@@ -32,30 +32,33 @@ Grid (kernel)
 
 ## Block 调度
 
-SM 内部有一个 **Block Scheduler**，负责将 Block 分配给可用的 SM。调度策略是**贪心的**：只要有空闲 SM，就立即分配下一个 Block。
+GPU 前端的工作分配器（GigaThread Engine 一类硬件）负责把 Block 分配到可用的 SM，SM 内部再管理已驻留的 Block。调度策略是**贪心的**：只要有空闲 SM 且资源足够，就立即分配下一个 Block。
 
 **多 Block 在同一个 SM 上的条件：**
 SM 的资源（寄存器、共享内存、线程数上限）必须能够同时容纳这些 Block。
 
 ```
-SM 资源池
-├── 寄存器: 65536
+SM 资源池（以 V100 为例）
+├── 寄存器: 65536 (256 KB)
 ├── 共享内存: 96 KB
-├── 最大线程数: 1536
-├── 最大 Block 数: 16
+├── 最大线程数: 2048
+├── 最大 Block 数: 32
 │
 ├── Block A: 256 threads, 32 reg/thread, 8 KB shared
 ├── Block B: 256 threads, 32 reg/thread, 8 KB shared
-│   (剩余资源: 512 threads, 32768 regs, 80 KB shared → 可容纳更多 Block)
+│   (两个 Block 共 512 线程、16384 个寄存器、16 KB 共享内存，
+│    仍可继续容纳更多 Block，直到任一资源耗尽)
 └── ...
 ```
+
+不同架构的资源上限不同：例如 A100 共享内存为 164 KB、H100 为 228 KB，但最大线程数（2048）和最大 Block 数（32）在 Volta 及之后保持一致。编写可移植代码时应查询 `cudaDeviceProp` 或使用 occupancy API。
 
 ## Warp — 执行的基本单元
 
 Warp 是 32 个线程的集合，是 GPU 调度和执行的**最小单元**。
 
 - 一个 Block 中的线程被划分为多个 Warp（`ceil(block_size / 32)` 个 Warp）
-- Warp 中的所有线程在同一时刻执行**相同的指令**（SIMT 模型）
+- Warp 中的所有线程通常在同一时刻执行**相同的指令**（SIMT 模型）。Volta 之前为严格锁步；Volta 及之后由独立线程调度（ITS）管理，分支处可能短暂发散，但取指仍以 warp 为单位。
 - **Warp Divergence：** 当 Warp 中的线程走不同的分支时，路径被串行化执行
 
 ```
@@ -144,7 +147,7 @@ Occupancy = Active_Warps / SM_Max_Warps
 
 ### 示例：32 寄存器/线程，Block Size 256
 
-假设 SM 配置（类似 V100 / A100）：
+假设 SM 配置（以 V100 为例；A100/H100 的共享内存分别为 164/228 KB）：
 
 | 资源 | 值 |
 |------|-----|

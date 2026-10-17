@@ -5,7 +5,6 @@
 - **Title:** TAGE-SC-L Branch Predictors
 - **Author:** Andre Seznec (Inria)
 - **Published in:** Journal of Instruction-Level Parallelism (JILP), 2014
-- **DOI:** 10.5555/2692286.2692287
 
 ## Also Referenced
 
@@ -19,7 +18,7 @@ TAGE (Tagged Geometric History Length) achieves near-optimal branch prediction a
 
 ## Background: Why We Need Better Branch Prediction
 
-Modern superscalar processors issue multiple instructions per cycle across deep pipelines (15--25 stages). Every branch -- roughly one every five to six instructions -- threatens to stall the front-end while the outcome resolves. The cost of a misprediction is the pipeline flush penalty multiplied by the issue width: on a 4-wide, 20-stage machine, a single misprediction wastes up to 80 instructions of work.
+Modern superscalar processors issue multiple instructions per cycle across deep pipelines (15--25 stages). Every branch -- roughly one every five to six instructions -- threatens to stall the front-end while the outcome resolves. The **cycle cost** of a misprediction is roughly the pipeline depth from fetch to branch resolution (plus refill); the **wasted instruction slots** are that cycle count multiplied by the issue width. On a 4-wide, 20-stage machine, a single misprediction can therefore waste on the order of 80 instruction slots of potential work (not all of which would necessarily have been usefully filled).
 
 Early predictors used simple 2-bit saturating counters (Smith, 1981), which capture the bias of a branch (e.g., always-taken or mostly-taken) but fail on branches with periodic or context-dependent behavior. Two-level adaptive predictors (Yeh & Patt, 1991) improved accuracy by tracking the outcomes of recent branches (the *global history*) and using that pattern to index a table of counters. However, these predictors still struggle when different branches interfere in the predictor table, a problem known as *aliasing*.
 
@@ -52,6 +51,8 @@ Conversely, a short-history table handles branches whose outcome depends only on
 ## Resource Efficiency
 
 TAGE's most impressive achievement is its accuracy-to-storage ratio. In the 2014 Championship Branch Prediction (CBP) evaluation, a 32-Kbit TAGE configuration achieved misprediction rates below 4 per 1000 instructions (4 MPKI) on CINT benchmarks -- outperforming much larger predictors:
+
+The following figures are illustrative: MPKI depends heavily on the benchmark suite, predictor configuration, and counting methodology, so they should be read as orders of magnitude rather than exact results.
 
 | Predictor Type          | Storage Budget | MPKI (CINT Avg.) |
 |-------------------------|---------------|-------------------|
@@ -93,12 +94,12 @@ The geometric history progression is a clever engineering trade-off. It's not op
 ### Open Questions
 
 1. **Diminishing returns**: Does doubling the history length from 256 to 512 bits still improve accuracy meaningfully, or have we hit the correlation limit for most branches?
-2. **Neural predictors**: Oliinyk et al. (2021) showed that small neural networks can match TAGE accuracy. Will future predictors move toward learned models, or does TAGE's simplicity and verifiability keep it dominant in commercial cores?
+2. **Neural predictors**: perceptron-based predictors (Jimenez & Lin, 2001) showed that learned weights can complement history tables. Will future commercial predictors move further toward learned models, or does TAGE's simplicity and verifiability keep it dominant in commercial cores?
 3. **Power**: TAGE reads multiple tables in parallel every cycle. With 7--8 tables, this energy cost is non-trivial. Can we design a predictor that activates only the most likely matching table(s) first?
 
 ### Relevance Today (2026)
 
-TAGE-based predictors remain the state of the art in commercial processors. ARM's Cortex-X series, AMD's Zen 4/5, and Intel's recent cores all use variants of TAGE for their main branch predictor. The core design has been refined (larger tables, better hash functions, improved SC components) but the fundamental architecture -- geometric histories, tagged entries, longest-match-wins -- has proven remarkably durable.
+TAGE-based predictors remain a dominant design point in commercial processors. Many high-performance cores are reported to use TAGE-like multi-table predictors: AMD's Zen series and Intel's recent cores are commonly analyzed as TAGE-derived, and Arm's Cortex-X series is believed to use a TAGE-like design. However, vendors do not publish full predictor details, so specific attributions should be treated as informed analysis rather than confirmed fact. The core design has been refined (larger tables, better hash functions, improved SC components) but the fundamental architecture -- geometric histories, tagged entries, longest-match-wins -- has proven remarkably durable.
 
 ---
 
@@ -109,5 +110,5 @@ TAGE-based predictors remain the state of the art in commercial processors. ARM'
 3. Yeh, T.-Y. & Patt, Y. N. "Two-Level Adaptive Training Branch Prediction." *Proceedings of MICRO-24*, 1991, pp. 51--61.
 4. Seznec, A. "The L-TAGE Branch Predictor." *JILP*, Vol. 9, 2007.
 5. Smith, J. E. "A Study of Branch Prediction Strategies." *Proceedings of ISCA-8*, 1981, pp. 135--148.
-6. Oliinyk, O. et al. "A Small Neural Network-Based Branch Predictor." *Proceedings of IISWC*, 2021.
+6. Jimenez, D. A. & Lin, C. "Dynamic Branch Prediction with Perceptrons." *Proceedings of HPCA-7*, 2001.
 7. Hennessy, J. L. & Patterson, D. A. *Computer Architecture: A Quantitative Approach*. 6th Edition. Morgan Kaufmann, 2019. Chapter 3.

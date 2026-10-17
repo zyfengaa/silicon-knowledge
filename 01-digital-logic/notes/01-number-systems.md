@@ -6,11 +6,11 @@ Digital computers use the binary (base-2) number system for a fundamental reason
 
 Key advantages of binary:
 - **Noise immunity**: voltage thresholds can be set with wide margins (e.g., TTL logic: 0-0.8 V for logic 0, 2.0-5.0 V for logic 1).
-- **Simple switching devices**: transistors operate naturally as switches (cut-off vs. saturation), mapping directly to 0/1.
+- **Simple switching devices**: transistors operate naturally as switches (cut-off vs. linear/triode in a MOSFET), mapping directly to 0/1.
 - **Boolean algebra**: binary maps cleanly onto Boolean logic, enabling formal design and optimization of circuits.
 - **Error detection**: binary codes (parity, CRC, Hamming codes) provide straightforward error detection and correction.
 
-As Patterson and Hennessy state: "The two-valued nature of binary digits matches the on/off nature of the signals in a digital circuit" [1].
+Consistent with Patterson and Hennessy's discussion of the hardware/software interface, the two-valued nature of binary digits matches the on/off behavior of digital signals [1].
 
 ---
 
@@ -251,7 +251,7 @@ When E = 0 and M != 0, the number is denormalized: the implicit leading bit is 0
 
 ## References
 
-1. Patterson, D. A., & Hennessy, J. L. (2017). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Chapter 1: Computer Abstractions and Technology.
+1. Patterson, D. A., & Hennessy, J. L. (2013). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Chapter 1: Computer Abstractions and Technology.
 
 2. IEEE Standard for Floating-Point Arithmetic. (2019). *IEEE Std 754-2019 (Revision of IEEE 754-2008)*, pp.1-84. doi:10.1109/IEEESTD.2019.8766229.
 

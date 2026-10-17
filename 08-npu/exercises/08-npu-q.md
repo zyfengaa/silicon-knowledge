@@ -127,7 +127,7 @@ Y[2][2] = 0×0 + (-1)×1 + 1×1 = 0
 1. 计算非对称量化（affine quantization）所需的 scale 和 zero_point。
 2. 对每个元素进行量化（quantize）：T_q = round(T / scale) + zero_point。
 3. 进行反量化（dequantize）：T' = (T_q - zero_point) × scale。
-4. 计算量化-反量化过程的最大绝对误差（MAE）和均方误差（MSE）。
+4. 计算量化-反量化过程的最大绝对误差（MaxAE）和均方误差（MSE）。
 5. 如果使用对称量化（zero_point=0），scale 如何计算？非对称和对称量化的误差差异有多大？
 
 ### 参考答案
@@ -189,7 +189,7 @@ T'[4] = (-101 - (-87)) × 0.03647 = (-14) × 0.03647 = -0.511
 | 7.8    | 7.805   | 0.005   |
 | -0.5   | -0.511  | 0.011   |
 
-最大绝对误差（MAE）= 0.011
+最大绝对误差（MaxAE）= 0.011
 均方误差（MSE）= (0.005² + 0² + 0.010² + 0.005² + 0.011²) / 5
 = (0.000025 + 0 + 0.0001 + 0.000025 + 0.000121) / 5
 = 0.000271 / 5 = 0.0000542
@@ -607,10 +607,10 @@ TVM和XLA的一个重要差异是：TVM使用基于规则的显式融合策略�
 
 8. Mishra A, Nurvitadhi E, Cook J J, et al. WRPN: Wide reduced-precision networks[C]//International Conference on Learning Representations (ICLR), 2018.
 
-9. Poole N, Jain A, Gope D, et al. Sparse tensor core algorithms[C]//2020 IEEE International Parallel and Distributed Processing Symposium Workshops (IPDPSW). IEEE, 2020: 1-10.
+9. Mishra A, Latorre J A, Pool J. Accelerating sparse deep neural networks[J]. arXiv preprint arXiv:2104.08378, 2021.
 
 10. Chen T, Moreau T, Jiang Z, et al. TVM: An automated end-to-end optimizing compiler for deep learning[C]//13th USENIX Symposium on Operating Systems Design and Implementation (OSDI). USENIX, 2018: 578-594.
 
-11. Sabne A, Sakr M, Jiang P, et al. XLA: Optimizing machine learning compiler[C]//Proceedings of the 2020 International Conference on Parallel Architectures and Compilation Techniques (PACT). ACM, 2020.
+11. Sabne A. XLA: Compiling machine learning for peak performance[R]. Google Research Technical Report, 2020.
 
 12. Zhou A, Yao A, Guo Y, et al. Incremental network quantization: Towards lossless CNNs with low-precision weights[C]//International Conference on Learning Representations (ICLR), 2017.

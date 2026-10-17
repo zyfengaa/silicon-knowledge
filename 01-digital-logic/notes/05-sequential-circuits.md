@@ -53,12 +53,12 @@ When EN=1, the latch is **transparent**: Q follows D. When EN=0, opaque: Q holds
 A D flip-flop samples the D input only at the **edge** of the clock signal (rising or falling), holding the value for the rest of the clock cycle.
 
 ```
-Truth Table (rising edge triggered):
-CLK  D | Q    Q'
---------|---------
-  /   0 | 0    1
-  /   1 | 1    0
- not / | Q    Q'   (hold)
+Truth Table (rising-edge triggered):
+CLK edge        D | Q(next)
+----------------|---|------
+rising edge     0 | 0
+rising edge     1 | 1
+no rising edge  X | Q (hold)
 ```
 
 ### Edge-Triggered vs. Level-Triggered
@@ -123,14 +123,13 @@ CLK:  __    __    __    __    __
 ### Setup and Hold Timing [3]
 
 ```
-          Clock edge
-                |
-           _____|_____
-CLK  _____|           |_________
-
-D    ==========X===============
-          |<->|  |<->
-          tsu  thold
+              clock edge
+                   |
+CLK  ______________|______________
+                   |
+D    ==============|==============
+              |<-->|<-->|
+               tsu  thold
 ```
 
 - **Setup time (t_su)**: Data must be stable **before** the clock edge. Violation may cause metastability.
@@ -140,6 +139,12 @@ D    ==========X===============
 
 ```
 T_min > t_clk-to-Q + t_comb_max + t_su + t_skew_margin
+```
+
+The hold constraint must also be satisfied (it is independent of the clock period):
+
+```
+t_hold <= t_clk-to-Q + t_comb_min
 ```
 
 ### Metastability
@@ -152,10 +157,10 @@ If D changes too close to the clock edge, the flip-flop may enter a metastable s
 
 1. Mano, M. M., & Ciletti, M. D. (2018). *Digital Design: With an Introduction to the Verilog HDL, VHDL, and SystemVerilog* (6th ed.). Pearson. Chapter 5: Synchronous Sequential Logic.
 
-2. Patterson, D. A., & Hennessy, J. L. (2017). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Appendix B: The Basics of Logic Design.
+2. Patterson, D. A., & Hennessy, J. L. (2013). *Computer Organization and Design: The Hardware/Software Interface* (5th ed.). Morgan Kaufmann. Appendix B: The Basics of Logic Design.
 
 3. Harris, S., & Harris, D. (2015). *Digital Design and Computer Architecture* (2nd ed.). Morgan Kaufmann. Chapter 3: Sequential Logic Design.
 
-4. Weste, N. H. E., & Harris, D. (2010). *CMOS VLSI Design: A Circuits and Systems Perspective* (4th ed.). Addison-Wesley. Chapter 10: Timing Analysis.
+4. Weste, N. H. E., & Harris, D. (2010). *CMOS VLSI Design: A Circuits and Systems Perspective* (4th ed.). Addison-Wesley. Chapter 10: Sequential Circuit Design; timing analysis is covered in Chapter 4 and Section 10.2.
 
 5. Rabaey, J. M., Chandrakasan, A., & Nikolic, B. (2003). *Digital Integrated Circuits: A Design Perspective* (2nd ed.). Prentice Hall. Chapter 7: Sequential Logic Circuits.

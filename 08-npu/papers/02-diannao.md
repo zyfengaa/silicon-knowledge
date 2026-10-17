@@ -1,10 +1,10 @@
-# DianNao: A Small-Footprint High-Throughput Accelerator for Machine Learning
+# DianNao: A Small-Footprint High-Throughput Accelerator for Ubiquitous Machine Learning
 
 > **文献信息**
-> - 会议：MICRO (International Symposium on Microarchitecture), 2014
+> - 会议：ASPLOS (International Conference on Architectural Support for Programming Languages and Operating Systems), 2014
 > - 作者：Tianshi Chen, Zidong Du, Ninghui Sun, Jia Wang, Chengyong Wu, Yunji Chen, Olivier Temam
 > - 机构：中国科学院计算技术研究所、INRIA
-> - 引用：Chen T, Du Z, Sun N, et al. DianNao: A small-footprint high-throughput accelerator for ubiquitous machine learning[C]//Proceedings of the 19th International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS). ACM, 2014. (注：该文发表于ASPLOS'14，但在MICRO系列中也常被引用，其姊妹篇在MICRO发表)。
+> - 引用：Chen T, Du Z, Sun N, et al. DianNao: A small-footprint high-throughput accelerator for ubiquitous machine learning[C]//Proceedings of the 19th International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS). ACM, 2014: 269-284.
 
 ---
 
@@ -50,9 +50,9 @@ DianNao在存储层次上采用了精心设计的结构，以缓解"存储墙"�
 
 1. **NBin（Neural Input Buffer）**：输入神经元缓冲区，大小为16KB，用于缓存当前层的输入特征图数据。由于卷积和全连接层都存在输入复用（同一个输入被多个卷积核使用），NBin的命中率对性能至关重要。
 
-2. **SB（Synapse Buffer）**：突触权重缓冲区，大小为16KB，用于缓存神经网络权重。权重在层内是固定的（weight stationary），因此SB的设计优先级最高——尽量减少从片外DRAM读取权重的次数。
+2. **SB（Synapse Buffer）**：突触权重缓冲区，大小为 2KB × 6 banks（合计 12KB），用于缓存神经网络权重。权重在层内是固定的（weight stationary），因此SB的设计优先级最高——尽量减少从片外DRAM读取权重的次数。
 
-3. **NBout（Neural Output Buffer）**：输出神经元缓冲区，大小为12KB，用于暂存部分和和最终输出结果。部分和在片内累积完成后，批量写回片外DRAM。
+3. **NBout（Neural Output Buffer）**：输出神经元缓冲区，大小为16KB，用于暂存部分和和最终输出结果。部分和在片内累积完成后，批量写回片外DRAM。
 
 ### 存储层次的工作流程
 
@@ -108,7 +108,7 @@ DaDianNao的本质思路是"用更大的片上存储减少DRAM访问"——训�
 ShiDianNao是针对视觉应用的极低功耗加速器，目标是直接与CMOS图像传感器集成。核心特征：
 - **无DRAM**：整个网络的全部数据都存储在片上SRAM中（总容量约28KB），彻底消除了DRAM访问能耗。
 - **近传感器计算（near-sensor processing）**：加速器直接放在传感器旁边甚至在传感器芯片上，最小化数据传输距离。
-- **功耗**：在65nm工艺下仅约0.32mW，足以支持电池供电的微型设备。
+- **功耗**：在65nm工艺下仅约320mW，足以支持电池供电的微型设备。
 
 ShiDianNao展示了当数据完全本地化时，能耗可以比DianNao再降低两个数量级。
 

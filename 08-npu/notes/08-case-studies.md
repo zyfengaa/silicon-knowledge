@@ -48,7 +48,7 @@ RS数据流的关键优势在于利用卷积的三个层次数据复用：
 
 1. **权重复用**：同一卷积核在多PE间被重复使用。
 2. **输入复用**：相邻卷积窗口的输入像素存在大量重合，通过PE之间的数据传递（而非从DRAM重新读取）实现复用。
-3. **部分和累加**：部分和持续在PE本地累加，直到完成整个卷积窗口的计算才写回DRAM。
+3. **部分和累加**：部分和在同一行卷积窗口的计算过程中持续累加，并可通过 PE 间的 NoC 传递，最终结果完成后才写回。**RS 并不等于 OS**：OS 把部分和固定在单个 PE 内，RS 则允许部分和在 PE 之间流动。
 
 ### 片上网络（NoC）
 
@@ -63,10 +63,10 @@ NoC的拓扑结构直接支持RS数据流的数据移动模式，避免了全局
 
 Eyeriss的片上存储包括：
 
-- **全局缓冲**：108KB SRAM（Eyeriss v1），在Eyeriss v2中扩展至512KB。
+- **全局缓冲**：108KB SRAM（Eyeriss v1）；Eyeriss v2 在此基础上扩大了片上存储并采用更灵活的配置（具体容量随配置变化，不宜写死）。
 - **PE本地寄存器**：每个PE内的RF用于缓存当前计算所需的最小数据集。
 
-Eyeriss v2（JSSC 2018）针对深度可分离卷积（Depthwise Separable Convolution）进行了优化，支持更灵活的数据流配置，并增加了对稀疏性的支持。
+Eyeriss v2（IEEE JETCAS 2019）针对深度可分离卷积等新兴网络结构进行了优化，支持更灵活的数据流配置，并增加了对稀疏性的支持。
 
 ## Apple ANE（Apple Neural Engine）
 
@@ -185,8 +185,8 @@ Ascend平台配合**CANN（Compute Architecture for Neural Networks）**软件�
 ## 参考文献
 
 1. Chen, T., et al. "DianNao: A Small-Footprint High-Throughput Accelerator for Ubiquitous Machine-Learning." ASPLOS 2014.
-2. Chen, Y.-H., Krishna, T., Emer, J., & Sze, V. "Eyeriss: An Energy-Efficient Reconfigurable Accelerator for Deep Convolutional Neural Networks." ISCA 2016.
-3. Chen, Y.-H., et al. "Eyeriss v2: A Flexible Accelerator for Emerging Deep Neural Networks." IEEE Journal of Solid-State Circuits (JSSC), 2018.
+2. Chen, Y.-H., Emer, J., & Sze, V. "Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks." ISCA 2016.
+3. Chen, Y.-H., Yang, T.-J., Emer, J., & Sze, V. "Eyeriss v2: A Flexible Accelerator for Emerging Deep Neural Networks on Mobile Devices." IEEE Journal on Emerging and Selected Topics in Circuits and Systems (JETCAS), 9(2), 2019.
 4. Apple Inc. "Apple Neural Engine." Apple Developer Documentation, 2020.
 5. Qualcomm. "Qualcomm Hexagon DSP and HVX Architecture." Qualcomm Developer Network, 2017.
 6. Liao, H., et al. "DaVinci: A Scalable Architecture for Neural Network Computing." IEEE Hot Chips Symposium, 2019.

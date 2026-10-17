@@ -35,7 +35,7 @@ L3 缓存引用              ~10 ns            40 cycles
 主存引用 (DRAM)          ~100 ns           400 cycles
 SSD 随机读               ~1e5 ns           400,000 cycles
 HDD 随机读               ~1e7 ns           40,000,000 cycles
-顺序从 HDD 读 1 MB       ~30,000,000 ns    120,000,000 cycles
+顺序从 HDD 读 1 MB       ~20,000,000 ns    80,000,000 cycles
 数据包从 US 到 EU 往返   ~150,000,000 ns   600,000,000 cycles
 ```
 

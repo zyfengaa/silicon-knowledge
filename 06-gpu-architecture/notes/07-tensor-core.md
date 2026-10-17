@@ -107,9 +107,9 @@ Tensor Core 的核心能力是**混合精度计算**：
 | FP8 (E4M3/E5M2) | FP8 | FP32 | ~2× |
 
 **TF32（Tensor Float 32）**—— Ampere 引入：
-- 10-bit 指数（同 FP32），8-bit 尾数（同 FP16）
-- 输入精度从 23-bit 减少到 10-bit，输出保持 FP32 精度
-- 不修改代码即可获得 ~8× 加速（配合自动混合精度）
+- 19-bit 格式：1-bit 符号 + 8-bit 指数（同 FP32）+ 10-bit 尾数（同 FP16）
+- 输入尾数从 FP32 的 23-bit 减少到 10-bit，累加仍为 FP32
+- 在 cuBLAS/cuDNN 中启用 TF32 后，矩阵乘通常可获得数倍加速（相对 FP32）
 
 ---
 
@@ -127,29 +127,31 @@ Tensor Core 的核心能力是**混合精度计算**：
 - 增加 INT8、INT4 支持
 - 增加 INT1（二进制神经网络支持）
 - 独立的 Tensor Core + CUDA Core 管线
-- 支持稀疏化推理
+- 注意：结构化 2:4 稀疏是 Ampere（第 3 代）才引入的，Turing 不支持
 
 ### Ampere (2020) — 第 3 代
 
 - 增加 BF16、TF32、FP64 支持
-- 支持**结构化稀疏**（2:4 sparse）：利用特有空值模式，^TFLOPS翻倍
-- TF32 模式下无需修改代码获 8× 加速
+- 支持**结构化稀疏**（2:4 sparse）：每 4 个连续元素中固定 2 个为非零，稀疏 Tensor Core 路径的峰值吞吐可达到密集路径的 2 倍（实际加速取决于模型稀疏度、权重排布与 kernel 实现）
+- TF32 相对 FP32 的**峰值**吞吐约为 8 倍（A100：TF32 156 TFLOPS vs FP32 19.5 TFLOPS）。cuBLAS/cuDNN 中启用 TF32 通常无需修改代码，但实际加速取决于 kernel、矩阵形状以及是否真正走 Tensor Core 路径，不能保证 8× 端到端加速
 - 单 SM 性能大幅提升
 
 ### Hopper (2022) — 第 4 代
 
 - 增加 FP8 (E4M3/E5M2) 支持
 - **Transformer Engine**：自动检测精度需求，切换 FP8/FP16
-- 支持 async copy（从全局内存到共享内存的 DMA，独立于计算）
+- **TMA（Tensor Memory Accelerator）**：由专用硬件完成多维张量的全局内存↔共享内存搬运（Ampere 的 `cp.async` 是 Hopper TMA 的前身）
+- 支持 Thread Block Cluster 与分布式共享内存（DSMEM）、WGMMA（warpgroup 级矩阵乘）
 - DPX 指令加速动态规划算法
 - Tensor Core 使用率进一步提升
 
 ### Blackwell (2024) — 第 5 代
 
-- 第 5 代 Tensor Core 支持 FP4、FP6
-- NF4（Normal Float 4）—— 适配权重的非均匀 4-bit 格式
+- 第 5 代 Tensor Core 支持 FP4、FP6（包括 MXFP4/NVFP4 等缩放格式）
+- 引入 tcgen05 矩阵乘指令与 Tensor Memory（TMEM），支持 2-SM 协同 MMA
 - 单 SM 的 Tensor Core 密度进一步增加
 - 支持第二代 Transformer Engine
+- 注：NF4（NormalFloat 4）是 QLoRA/bitsandbytes 提出的**软件量化格式**，并非 Blackwell 的硬件数据类型；Blackwell 的硬件低精度格式是 FP4/FP6
 
 ### 性能演进
 
@@ -180,7 +182,7 @@ using namespace nvcuda::wmma;
 // - 16×16×16 (Volta+)
 // - 8×32×16   (Volta+, M=8, N=32)
 // - 32×8×16   (Volta+, M=32, N=8)
-// - 8×8×4     (Turing+)
+// - 8×8×4     (Volta+, PTX mma.m8n8k4；Turing/Ampere 上也可用)
 ```
 
 ### 使用 cuBLAS 的 Tensor Core 后端
@@ -254,10 +256,10 @@ Tensor Core 在最关键的计算上提供了 **8-16 倍**的吞吐量提升，�
 ## 参考文献
 
 - NVIDIA, *Volta V100 GPU Architecture Whitepaper*, 2017. Section: Tensor Core.
-- NVIDIA, *Turing T102 GPU Architecture Whitepaper*, 2018. Section: Tensor Core Gen 2.
+- NVIDIA, *Turing TU102 GPU Architecture Whitepaper*, 2018. Section: Tensor Core Gen 2.
 - NVIDIA, *Ampere A100 GPU Architecture Whitepaper*, 2020. Section: Tensor Core Gen 3.
 - NVIDIA, *Hopper H100 GPU Architecture Whitepaper*, 2022. Section: Tensor Core Gen 4, Transformer Engine.
-- NVIDIA, *Blackwell B200 GPU Architecture Whitepaper*, 2024.
+- NVIDIA, *NVIDIA Blackwell Architecture Technical Brief*, 2024.
 - Markidis, S. et al., "NVIDIA Tensor Core Programmability, Performance & Precision", *IEEE International Parallel and Distributed Processing Symposium Workshops (IPDPSW)*, 2018. doi:10.1109/IPDPSW.2018.00091
 - NVIDIA, *CUDA C++ Programming Guide*, Section 9: WMMA (Warp Matrix Multiply-Accumulate).
 - Sze, V. et al., "Efficient Processing of Deep Neural Networks: A Tutorial and Survey", *Proceedings of the IEEE*, 105(12), 2017, pp. 2295-2329. Section 4.2: Tensor Core.

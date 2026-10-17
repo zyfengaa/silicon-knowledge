@@ -14,10 +14,11 @@
 | 04 | **Streams 与异步** | Stream 并发、Async 操作、Host-Device 数据传输重叠 |
 | 05 | **性能分析** | Nsight Compute / Nsight Systems 的实用指南 |
 | 06 | **cuBLAS / cuDNN** | 厂商优化库的原理与正确调用方式 |
+| 07 | **现代 CUDA 特性** | cp.async 流水线、TMA、CUDA Graphs、统一内存进阶、内存一致性模型 |
 
 ## 前置知识
 
-- [06 GPU 架构](/06-gpu-architecture/)（SM、Warp、内存层次）
+- [06 GPU 架构](../06-gpu-architecture/)（SM、Warp、内存层次）
 
 ## 建议学习方式
 
@@ -30,7 +31,7 @@
 
 | 文件 | 内容 |
 |------|------|
-| `cuda/async_copy.cu` | 异步内存传输 + kernel 执行重叠 |
+| `cuda/async_copy.cu` | 异步内存传输（`cudaMemcpyAsync`）+ kernel 执行重叠 |
 | `cuda/multi_stream.cu` | 多 Stream 并发执行 |
 | `cuda/custom_kernel_opt.cu` | 综合 kernel 优化案例 |
 

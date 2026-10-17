@@ -41,8 +41,8 @@ Real caches are typically 2- to 16-way set-associative. L1 caches tend toward lo
 
 When a miss occurs and the set is full, a line must be evicted. Common policies:
 
-- **LRU (Least Recently Used)**: Replace the line accessed furthest in the past. Optimal for many workloads but expensive to implement for high associativity (requires per-access update of state).
-- **Pseudo-LRU (Tree-PLRU)**: Approximates LRU with a binary tree of bits. Used in many real processors (e.g., Intel Sandy Bridge LLC).
+- **LRU (Least Recently Used)**: Replace the line accessed furthest in the past. Performs well on many workloads but is not theoretically optimal (Belady's OPT/MIN, which requires future knowledge, is), and is expensive to implement for high associativity (requires per-access update of state).
+- **Pseudo-LRU (Tree-PLRU)**: Approximates LRU with a binary tree of bits. Used in some real processors; vendors usually do not disclose the exact replacement policy, and it may vary by microarchitecture.
 - **Random/NR U**: Simple but less predictable. Used in some high-associativity caches where exact LRU is too expensive.
 
 ### 4. Write Policies
@@ -116,9 +116,9 @@ Modern optimisations increasingly focus on bandwidth (how many bytes per cycle c
 
 1. **Cache-oblivious vs cache-aware programming**: The tiling (blocking) optimisation described in the textbooks is cache-aware -- the programmer selects a tile size based on known cache parameters. Cache-oblivious algorithms (e.g., recursive divide-and-conquer) achieve good cache behaviour without knowing cache size, but often have higher overhead. Both approaches are fascinating examples of how architecture influences algorithm design.
 
-2. **Associativity is not free**: While higher associativity reduces conflict misses, it increases access latency (more tag comparisons) and power consumption. In practice, L1 caches often use 2-8 ways with careful layout to minimise latency impact, while LLCs use 16-32 ways where latency matters less. This is a concrete example of the quantitative approach Patterson and Hennessy advocate: measure, then design.
+2. **Associativity is not free**: While higher associativity reduces conflict misses, it increases access latency (more tag comparisons) and power consumption. In practice, L1 caches often use 2-8 ways with careful layout to minimise latency impact, while LLCs use 16 or more ways where latency matters less. This is a concrete example of the quantitative approach Patterson and Hennessy advocate: measure, then design.
 
-3. **The rise of ML-driven prefetching**: Recent research (e.g., from the 2022-2025 ISCA/MICRO proceedings) explores using neural networks for cache prefetching and replacement. While the textbook LRU is still the baseline taught, many real processors now use adaptive policies that learn from access patterns (e.g., Intel's Adaptive Replacement Cache in some Xeon generations).
+3. **The rise of ML-driven prefetching**: Recent research (e.g., from the 2022-2025 ISCA/MICRO proceedings) explores using neural networks for cache prefetching and replacement. While the textbook LRU is still the baseline taught, many real processors now use vendor-specific adaptive replacement policies; the exact algorithms are usually not publicly documented, so claims about a specific product using a named algorithm should be treated with caution.
 
 4. **The TLB as a special cache**: The Translation Lookaside Buffer is conceptually just another cache, but with all-or-nothing performance implications -- a TLB miss can cost hundreds to thousands of cycles because it may require walking multi-level page tables in memory. The move to larger page sizes (2 MB, 1 GB) in modern OSes is driven directly by TLB reach concerns, especially for large-memory applications like databases and AI inference servers.
 

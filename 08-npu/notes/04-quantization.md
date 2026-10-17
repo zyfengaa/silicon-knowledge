@@ -12,7 +12,7 @@
 
 ### 1.2 带宽瓶颈的缓解
 
-在神经网络推理中，**内存带宽是比计算能力更稀缺的资源**。以A100 GPU为例，其FP16计算能力为312 TFLOPS，而HBM2e内存带宽仅为2 TB/s。这意味着每个加载到寄存器中的FP16数值只有约6.5次计算机会——超过此值，计算核心就会因等待数据而处于空闲状态。将数据从FP32/FP16压缩到INT8，相当于将有效带宽提升了2-4倍，直接缓解了"内存墙"问题。
+在神经网络推理中，**内存带宽是比计算能力更稀缺的资源**。以 A100 GPU 为例，其 FP16 计算能力为 312 TFLOPS，HBM2e 内存带宽约为 2 TB/s。两者的比值是 $312 \times 10^{12} / 2 \times 10^{12} = 156$ FLOP/字节；由于每个 FP16 数值占 2 字节，这相当于**每个加载到寄存器中的 FP16 数值约有 312 FLOP、即约 156 次乘加（MAC）的机会**，而不是 6.5 次。若按 INT8（1 字节/值）计，则每个字节可对应约 156 次乘加。将数据从 FP32/FP16 压缩到 INT8，相当于把有效带宽提升 2–4 倍，直接缓解了"内存墙"问题。
 
 ### 1.3 高效整数运算的优势
 
@@ -170,7 +170,7 @@ BF16的精度（约7位有效数字）低于FP16（约10位有效数字）——
 - 梯度在反向传播中可能跨越多个数量级（从$10^{-8}$到$10^2$），需要宽动态范围防止下溢/上溢。
 - 训练过程中，学习率和正则化项引入的数值变化需要大的指数空间。
 
-BF16的前向和反向精度已足够支持绝大多数深度学习训练的收敛。据Google的实测报告，BF16训练在BERT、ResNet-50等模型中可以达到与FP32训练几乎完全一致的收敛曲线（Wang et al., 2018）。
+BF16的前向和反向精度已足够支持绝大多数深度学习训练的收敛。据 Google 的实测报告，BF16 训练在 BERT、ResNet-50 等模型上可以达到与 FP32 训练几乎一致的收敛曲线（Kalamkar et al., 2019）。
 
 ### 5.2 FP8（8-bit Floating Point）
 
@@ -204,7 +204,7 @@ NVIDIA的H100 GPU首次在硬件层面原生支持FP8计算，使用E4M3表示�
 | 格式 | 比特数 | 典型范围 | 主要应用 | 硬件支持 |
 |------|--------|----------|----------|----------|
 | INT8  | 8   | $[-128, 127]$ 或 $[0, 255]$ | 推理 | 几乎所有NPU和现代GPU |
-| INT4  | 4   | $[-8, 7]$ 或 $[0, 15]$ | 极致压缩推理 | 部分NPU（如Apple Neural Engine） |
+| INT4  | 4   | $[-8, 7]$ 或 $[0, 15]$ | 极致压缩推理 | 部分 NPU / 移动端加速器 |
 | BF16  | 16  | $\pm 3.4 \times 10^{38}$ | 训练 | TPU v2+, A100+ GPU |
 | FP16  | 16  | $\pm 6.55 \times 10^4$ | 训练（早期方案） | Volta+ GPU |
 | FP8 E4M3 | 8 | $[-448, 448]$ | 推理和训练前向 | H100+ GPU |
@@ -215,7 +215,7 @@ NVIDIA的H100 GPU首次在硬件层面原生支持FP8计算，使用E4M3表示�
 NPU架构设计者在量化方面面临以下关键决策：
 
 1. **支持的精度格式**：现代NPU需要同时支持INT8、INT4、BF16等多种格式。不同格式之间的切换需要支持不同位宽的数据路径和多模式MAC单元。
-2. **累加器位宽**：INT8乘加操作需要足够宽的累加器防止溢出。业界共识是使用INT32累加器。对于4-bit量化，INT16累加器通常足够。
+2. **累加器位宽**：INT8 乘加操作需要足够宽的累加器防止溢出。业界常见做法是使用 INT32 累加器；对于 4-bit 输入，也通常使用 INT32（至少在累加链较长时），INT16 只适用于很短的累加链，不能一概而论。
 3. **量化参数的在线更新**：在动态量化（如每token、每channel的量化）中，缩放因子和零点需要在线计算并广播到所有PE，这增加了控制逻辑的复杂性。
 4. **混合精度调度**：网络的不同层可能需要不同的量化精度。NPU编译器需要支持逐层或逐操作粒度的精度配置。
 
@@ -225,7 +225,7 @@ NPU架构设计者在量化方面面临以下关键决策：
 
 2. Micikevicius, P., et al. "FP8 Formats for Deep Learning." *arXiv preprint arXiv:2209.05433*, 2022.
 
-3. Wang, S., et al. "Mixed Precision Training of Deep Neural Networks with the Brain Floating Point (BF16) Format." *arXiv preprint arXiv:1808.07596*, 2018.
+3. Kalamkar, D., et al. "A Study of BFLOAT16 for Deep Learning Training." *arXiv preprint arXiv:1905.12322*, 2019.
 
 4. Horowitz, M. "Computing's Energy Problem (and what we can do about it)." *IEEE International Solid-State Circuits Conference (ISSCC) Digest of Technical Papers*, 2014.
 

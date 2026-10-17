@@ -82,7 +82,7 @@ if (threadIdx.x < 16) {
 }
 ```
 
-**执行方式：** 两条路径串行执行——GPU 先执行路径 A（线程 0-15 活跃，线程 16-31 被掩码），然后执行路径 B（线程 16-31 活跃，线程 0-31 被掩码）。
+**执行方式：** 两条路径串行执行——GPU 先执行路径 A（线程 0-15 活跃，线程 16-31 被掩码），然后执行路径 B（线程 16-31 活跃，线程 0-15 被掩码）。
 
 **性能影响：** warp 需要 cycles(path_A) + cycles(path_B) 而不是 max(cycles(path_A), cycles(path_B))。
 
@@ -90,7 +90,7 @@ if (threadIdx.x < 16) {
 
 ### 4. Convergence（汇合）
 
-在发散分支之后，所有线程必须在 **汇合点**（if/else 之后的指令）重新汇合。硬件通过 **活跃掩码**（active mask）跟踪哪些线程活跃，并在汇合点恢复完整掩码。
+在发散分支之后，所有线程通常会在 **汇合点**（if/else 之后的指令）重新汇合。硬件通过 **活跃掩码**（active mask）跟踪哪些线程活跃，并在汇合点恢复完整掩码。需要强调：Volta 引入独立线程调度（ITS）后，每个线程有独立 PC，汇合由调度器尽量完成但并不保证立即发生；依赖 warp 级同步的代码应显式调用 `__syncwarp()`。
 
 ### 5. SIMT 栈
 
@@ -117,19 +117,21 @@ Warp            ->  32 个线程，同一条指令
 
 每个 SM 包含：
 
-- **Warp 调度器：** 每 SM 2-4 个（Fermi: 2, Maxwell: 4, Volta: 4）
+- **Warp 调度器：** 每 SM 2-4 个（Fermi: 2；Maxwell 及之后: 4）
 - **CUDA 核心 / ALU：** 每 SM 32-128 个
-- **寄存器文件：** 每 SM 64K-256K 个寄存器（在 warp 间分配）
-- **共享内存：** 每 SM 16-128 KB
-- **Warp 上下文：** 约 64 个 warp 的状态（支持快速切换）
+- **寄存器文件：** 每 SM 65,536 个 32-bit 寄存器（256 KB），在活动 warp 间分配
+- **共享内存：** 每 SM 48-228 KB（H100 为 228 KB）
+- **Warp 上下文：** 最多 64 个 warp 的状态（支持快速切换）
 
 ### 指令发射
 
-Warp 调度器选择一个就绪的 warp 并发射一个或两个指令：
+Warp 调度器选择一个就绪的 warp 并发射指令：
 
-- Maxwell 以上：两个独立的 warp 调度器，每个每周期发射一条指令
-- Volta 以上：四个调度器，每个每周期发射一条指令（独立线程调度）
-- 每个调度器从 16-32 个 warp 中选择以隐藏延迟
+- Fermi / Kepler：每个调度器每周期最多发射两条独立指令（dual-issue）
+- Maxwell / Pascal / Volta / Ampere / Hopper / Blackwell：每个调度器每周期发射一条指令
+- Maxwell 及之后每个 SM 有 4 个调度器（Fermi 为 2 个）
+- Volta 及之后支持独立线程调度（ITS）
+- 每个调度器从一组 warp 中选择以隐藏延迟
 
 ### 延迟隐藏
 
@@ -161,5 +163,5 @@ Warp 调度器选择一个就绪的 warp 并发射一个或两个指令：
 2. Kirk, D. B., & Hwu, W. W. *Programming Massively Parallel Processors: A Hands-on Approach*. 4th Edition. Morgan Kaufmann, 2022. — Chapter 4: Execution Model. 清晰的带有图示的教学解释。
 3. Lindholm, E., Nickolls, J., Oberman, S., & Montrym, J. "NVIDIA Tesla: A Unified Graphics and Computing Architecture." *IEEE Micro*, Vol. 28, No. 2, 2008. — Tesla 架构中 SIMT 模型的原始描述。
 4. Nickolls, J., & Dally, W. J. "The GPU Computing Era." *IEEE Micro*, 2010. — GPU 计算演进概述，包括 SIMT 与 SIMD 的权衡。
-5. Fung, W. L., et al. "Dynamic Warp Formation and Management for GPU Workloads." *PACT'09*. — 关于通过动态重组减少发散开销的研究。
+5. Fung, W. L., Sham, I., Yuan, G., & Aamodt, T. M. "Dynamic Warp Formation and Scheduling for Efficient GPU Control Flow." *MICRO-40 (IEEE/ACM International Symposium on Microarchitecture)*, 2007. — 关于通过动态重组减少发散开销的研究。
 6. Harris, M. "CUDA Pro Tip: Optimize for Warp Execution." *NVIDIA Developer Blog*, 2013. — 关于 warp 执行优化的实践技巧。

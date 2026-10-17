@@ -136,10 +136,10 @@ N=40: 时钟 = 2000/40 + 50 = 100ps  → 频率 = 10.0 GHz  (加速 1.5x)
 - 转发逻辑更复杂（需要更多级转发通路）
 - Load-use 冒险的停顿周期更多（load 结果可用更晚）
 
-具体来说，分支错误代价 = N/2 - 1 左右（取决于分支条件判断的位置），而不是固定的 2。
+具体来说，分支错误代价取决于分支条件在流水线中的解析位置：5 级流水线在 EX 解析时为 2 个周期；更深的流水线中，代价约等于从 IF 到解析级之间的级数。下面的数值只是"分支在流水线中部解析"的示意假设，并不是通用公式。
 
 ```
-不同深度下，分支预测错误的 CPI 影响（假设分支 17%，错误率 10%）：
+不同深度下，分支预测错误的 CPI 影响（假设分支在中部解析，分支 17%，错误率 10%）：
 N=5:  CPI_control = 0.17 × 0.10 × 2  = 0.034
 N=10: CPI_control = 0.17 × 0.10 × 5  = 0.085
 N=20: CPI_control = 0.17 × 0.10 × 10 = 0.170
@@ -168,12 +168,12 @@ P_total = P_base + P_registers(N) + P_hazard_logic(N) + P_clock(N)
 
 其中 CPI_stall(N) 随 N 增加而增加。
 
-通过计算可发现：最优深度通常在 N=10~15 左右（对于通用处理器），但在实际设计中还受到功耗、面积、工艺等因素的影响。
+通过计算和实测可以找到一个最优深度，但它取决于工艺、寄存器开销、冒险代价、功耗和面积等因素，并不存在通用的 N=10~15 结论。实际设计需要在具体工艺和工作负载下建模、仿真和测量。
 
 ```
               性能（归一化）
               ▲
-   2.0        │    •最优深度~10-15
+   2.0        │    •最优深度（随工艺/设计变化）
               │      •
    1.5        │    •   •
               │   •     •
@@ -185,7 +185,7 @@ P_total = P_base + P_registers(N) + P_hazard_logic(N) + P_clock(N)
               5  10  15  20  25  30
 ```
 
-> 数据来源：Hennessy & Patterson, *Computer Architecture: A Quantitative Approach*, Section 3.7
+> 说明：上图为示意模型，不是实测数据。流水线深度的权衡可参考 Hennessy & Patterson, *Computer Architecture: A Quantitative Approach* 第 3 章以及附录 C 的定性讨论。
 
 ---
 
@@ -202,7 +202,7 @@ CPU_time = Instruction_Count × CPI × Clock_Cycle_Time
 | 因素 | 流水线的影响 |
 |------|-------------|
 | **IC** | 不变（流水线不改变指令条数） |
-| **CPI** | 理想为 1，实际 >1（冒险导致） |
+| **CPI** | 单发射理想为 1；超标量理想可小于 1（如 4-wide 理想 0.25）；实际受冒险和 cache 缺失影响 |
 | **T_cycle** | 减少（深度越深，周期越短） |
 
 流水线深度对执行时间的影响：
@@ -227,7 +227,7 @@ CPU_time(N) = IC × CPI(N) × T_cycle(N)
 | + 控制冒险（2 位预测） | 1.08-1.15 | 分支预测错误 |
 | + cache 缺失 | 2.0-5.0 | 这是现代 CPU 的 CPI 主要影响因素！ |
 
-> 注意：现代 CPU 的 CPI 通常在 1.0-2.0 之间（理想情况下接近 1），但 cache 缺失会使 CPI 剧增到数十甚至上百。这就是为什么模块 04 的内存层次结构如此重要。
+> 注意：现代超标量 CPU 的 CPI 常常小于 1（例如 4-wide 理想情况为 0.25），但 cache 缺失会显著抬高 CPI，严重时可达到数十甚至上百。这就是为什么模块 05 的内存层次结构如此重要。
 
 ### 4.2 比较：不同分支预测器的 CPI
 
@@ -238,7 +238,7 @@ CPU_time(N) = IC × CPI(N) × T_cycle(N)
 预测器           准确率    CPI_control    CPI_total
 ─────────────────────────────────────────────────────
 理想                100%       0.000         1.050
-完美 2 位动态       93%        0.024         1.074
+高准确率 2 位动态 93%        0.024         1.074
 一般 2 位动态       90%        0.034         1.084
 1 位动态            85%        0.051         1.101
 静态-不跳转         70%        0.102         1.152
@@ -291,12 +291,12 @@ f_unpipelined: 流水线中不可加速部分的比例（寄存器开销）
 - CPI_data 主要来自 load-use 冒险（约 0.05-0.10）
 - CPI_control 取决于分支预测准确率和错误代价（约 0.03-0.15）
 - 更深流水线 → 更高时钟频率，但冒险代价增大、寄存器开销导致收益递减
-- 最优深度通常在 10-15 级左右（设计权衡的结果）
+- 最优深度取决于工艺、功耗、面积和工作负载，需要通过建模与实测确定，不存在通用数值
 - Amdahl 定律限制了流水线深度的最大收益
 
 ## 参考文献
 
-- Hennessy & Patterson, *Computer Architecture: A Quantitative Approach* 6th Edition, 第 3 章 "Pipelining: Basic and Intermediate Concepts", Section 3.7 "How Much Pipeline is Enough?"
+- Hennessy & Patterson, *Computer Architecture: A Quantitative Approach* 6th Edition, 第 3 章 "Instruction-Level Parallelism and Its Exploitation"；流水线基础参见附录 C "Pipelining: Basic and Intermediate Concepts"
 - Patterson & Hennessy, *Computer Organization and Design RISC-V Edition*, 第 4 章 Section 4.5-4.10
 - John Paul Shen, Mikko H. Lipasti, *Modern Processor Design: Fundamentals of Superscalar Processors*, 第 3-4 章
 - David A. Patterson, "Latency Lags Bandwidth", Communications of the ACM 47(10), 2004 — 讨论延迟与带宽的权衡

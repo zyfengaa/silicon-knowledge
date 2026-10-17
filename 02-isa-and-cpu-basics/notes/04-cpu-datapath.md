@@ -33,7 +33,7 @@ For a single-cycle CPU, all five stages complete within one clock cycle.
 
 ### Step-by-Step: How `add x1, x2, x3` Flows Through the Datapath
 
-Let us trace the execution of `add x1, x2, x3` (encoding: `0x002100B3`).
+Let us trace the execution of `add x1, x2, x3` (encoding: `0x003100B3`).
 
 #### Stage 1: Instruction Fetch (IF)
 
@@ -46,10 +46,10 @@ Let us trace the execution of `add x1, x2, x3` (encoding: `0x002100B3`).
 +---------------------+
 | Instruction Memory  |
 | Address 0x100:      |
-| 0x002100B3 (add)    |
+| 0x003100B3 (add)    |
 +---------------------+
 
-Result: 32-bit instruction word = 0x002100B3 is read from memory
+Result: 32-bit instruction word = 0x003100B3 is read from memory
 PC is also sent to the adder for PC+4 calculation
 ```
 
@@ -162,7 +162,7 @@ Result: x1 is updated with the sum of x2 and x3
 
 **Register File Ports**: Two read ports (rs1, rs2) and one write port (rd) allow simultaneous register reads in the ID stage and writes in the WB stage.
 
-**Instruction vs. Data Memory**: Harvard architecture (separate memories) avoids a structural hazard in single-cycle design. Modern CPUs unify them with caches (modified Harvard).
+**Instruction vs. Data Memory**: Harvard architecture (separate memories) allows an instruction fetch and a data access to occur in the same cycle without contention. In pipelined designs this same conflict is called a structural hazard. Modern CPUs usually present a unified address space backed by caches (modified Harvard).
 
 **PC Update**: PC+4 is always computed. The branch/jump multiplexer selects between PC+4 (sequential) and the branch target (taken branch) or ALU result (JALR).
 

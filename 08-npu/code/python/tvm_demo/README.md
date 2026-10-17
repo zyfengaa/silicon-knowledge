@@ -32,7 +32,7 @@ runtime module (可执行)
 import torch
 import torchvision
 
-model = torchvision.models.resnet18(pretrained=True)
+model = torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.DEFAULT)
 dummy_input = torch.randn(1, 3, 224, 224)
 
 torch.onnx.export(
@@ -67,7 +67,8 @@ mod = relay.transform.FoldConstant()(mod)
 ```python
 target = "llvm"  # 或 "cuda", "opencl"
 with tvm.transform.PassContext(opt_level=3):
-    lib = relay.build(mod, target=target, params=params)
+    # tvm.compile 是较新的统一入口；relay.build 已进入维护/弃用路径
+    executor = tvm.compile(mod, target=target, params=params)
 ```
 
 ### 步骤 5：部署运行
@@ -75,7 +76,7 @@ with tvm.transform.PassContext(opt_level=3):
 ```python
 # 创建运行时环境
 dev = tvm.device(str(target), 0)
-module = tvm.contrib.graph_executor.GraphModule(lib["default"](dev))
+module = tvm.contrib.graph_executor.GraphModule(executor)
 
 # 设置输入并运行
 import numpy as np
@@ -99,9 +100,11 @@ tasks, task_weights = tvm.auto_scheduler.extract_tasks(mod["main"], params, targ
 
 # 创建调优器并运行搜索
 tuner = tvm.auto_scheduler.TaskScheduler(tasks, task_weights)
-tuner.tune(tvm.auto_scheduler.LocalBuilder(), 
-           tvm.auto_scheduler.LocalRunner(timeout=30), 
-           n_trials=1000)
+tune_option = tvm.auto_scheduler.TuningOptions(
+    num_measure_trials=1000,
+    measure_callbacks=[tvm.auto_scheduler.RecordToFile("auto_scheduler.json")],
+)
+tuner.tune(tune_option)
 ```
 
 ## 关键优化
@@ -122,7 +125,7 @@ TVM 自动将 Conv2D + BiasAdd + ReLU 融合为单个 kernel，显著减少内�
 ## 系统要求
 
 ```bash
-pip install tvm apache-tvm onnx torchvision numpy
+pip install apache-tvm onnx torch torchvision numpy
 ```
 
 ## 更多资源

@@ -64,15 +64,15 @@ int main() {
     // 分配设备内存（合并访问使用 N 个元素，跨步访问使用 N * STRIDE 个元素）
     float *d_in_coal, *d_out_coal;
     float *d_in_stride, *d_out_stride;
-    cudaMalloc(&d_in_coal, N * sizeof(float));
-    cudaMalloc(&d_out_coal, N * sizeof(float));
-    cudaMalloc(&d_in_stride, N * STRIDE * sizeof(float));
-    cudaMalloc(&d_out_stride, N * STRIDE * sizeof(float));
+    cudaMalloc((void **)&d_in_coal, N * sizeof(float));
+    cudaMalloc((void **)&d_out_coal, N * sizeof(float));
+    cudaMalloc((void **)&d_in_stride, N * STRIDE * sizeof(float));
+    cudaMalloc((void **)&d_out_stride, N * STRIDE * sizeof(float));
 
-    // 初始化设备数据
-    cudaMemset(d_in_coal, 1, N * sizeof(float));
+    // 初始化设备数据（memset 按字节写入，0 字节表示的 float 正好是 0.0f）
+    cudaMemset(d_in_coal, 0, N * sizeof(float));
     cudaMemset(d_out_coal, 0, N * sizeof(float));
-    cudaMemset(d_in_stride, 1, N * STRIDE * sizeof(float));
+    cudaMemset(d_in_stride, 0, N * STRIDE * sizeof(float));
     cudaMemset(d_out_stride, 0, N * STRIDE * sizeof(float));
 
     cudaEvent_t start, stop;
@@ -114,17 +114,19 @@ int main() {
     double effective_bytes = (double)(N * sizeof(float)) * 2;  // 读 N + 写 N
     double bw_stride = effective_bytes / (ms / 1000.0) / 1e9;
 
-    // 实际从 DRAM 读取的字节数（跨步访问导致缓存行浪费）
-    // 每个 warp (32 线程) 跨步 = STRIDE 时，访问地址范围 = 32 * STRIDE * 4 字节
-    // 需要 ceil(32 * STRIDE * 4 / 128) 个缓存行
-    double actual_read_bytes = (double)(N * STRIDE) * sizeof(float);
-    double actual_bw_stride = actual_read_bytes / (ms / 1000.0) / 1e9;
+    // 估计从 DRAM 实际传输的字节数（跨步访问导致缓存行浪费）
+    // 每个 warp (32 线程) 访问地址范围 = 32 * STRIDE * 4 字节，
+    // 但其中每 128 字节缓存行只用到 4 个 float（16 字节）。
+    // 读写都是跨步的，因此读、写各放大 STRIDE 倍：总流量 ≈ 2 * N * STRIDE * 4 字节。
+    double actual_dram_bytes = 2.0 * (double)(N * STRIDE) * sizeof(float);
+    double actual_bw_stride = actual_dram_bytes / (ms / 1000.0) / 1e9;
 
     printf("\n--- Strided (stride=%d) ---\n", STRIDE);
     printf("  Time:         %.4f ms\n", ms);
     printf("  Grid:         %d blocks\n", blocks_stride);
     printf("  Eff. BW:      %.2f GB/s (基于有效数据)\n", bw_stride);
-    printf("  Actual BW:    %.2f GB/s (基于实际请求的 DRAM 字节)\n", actual_bw_stride);
+    printf("  Actual BW:    %.2f GB/s (估算的实际 DRAM 流量)\n", actual_bw_stride);
+    printf("  缓存行利用率: %.1f%%\n", 100.0 * bw_stride / actual_bw_stride);
 
     // 相对性能
     double coals_ms = 0, stride_ms = 0;

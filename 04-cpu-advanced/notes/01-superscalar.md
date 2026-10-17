@@ -18,7 +18,7 @@
 | Intel Core 2 | 4 | 4-wide |
 | Intel Golden Cove (P-core) | 6 | 6-wide decode |
 | Apple M1 Firestorm | 8 | 8-wide decode |
-| AMD Zen 4 | 8 | 8-wide front end |
+| AMD Zen 4 | 4 decode / 6 dispatch | 前端 4-wide 解码、6-wide 分派 |
 
 **多发射的两种方式：**
 
@@ -74,7 +74,7 @@ ADD X3, X4, X5     ; 是否执行？取决于分支结果
 
 ### ILP 天花板
 
-研究表明，即使采用无限资源（完美分支预测、无限功能单元），典型程序的 ILP 在 2 ~ 6 之间（Wall & Lim 研究）。这从根本上限制了超标量处理器的回报：
+研究表明，即使采用无限资源（完美分支预测、无限功能单元），典型程序的 ILP 在 2 ~ 6 之间（D. W. Wall, "Limits of Instruction-Level Parallelism", ASPLOS 1991）。这从根本上限制了超标量处理器的回报：
 
 - 2-wide → 4-wide：性能提升显著
 - 4-wide → 8-wide：提升有限

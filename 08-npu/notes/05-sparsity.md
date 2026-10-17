@@ -89,7 +89,6 @@ $$
 1. Han, S., Mao, H., & Dally, W. J. "Deep Compression: Compressing Deep Neural Networks with Pruning, Trained Quantization and Huffman Coding." ICLR 2016.
 2. NVIDIA. "NVIDIA A100 Tensor Core GPU Architecture." Whitepaper, 2020.
 3. Han, S., et al. "EIE: Efficient Inference Engine on Compressed Sparse Neural Network." ISCA 2016.
-4. Zhu, M., et al. "Sparse Tensor Core: Algorithm and Hardware Co-Design for Efficient Sparse Neural Networks." SC 2020.
-5. Zhang, S., et al. "Cambricon-X: An Accelerator for Sparse Neural Networks." MICRO 2016.
-6. Gale, T., et al. "The State of Sparsity in Deep Neural Networks." arXiv:1902.09574, 2019.
-7. Mishra, A., et al. "Accelerating Sparse Deep Neural Networks." arXiv:2104.08378, 2021.
+4. Zhang, S., et al. "Cambricon-X: An Accelerator for Sparse Neural Networks." MICRO 2016.
+5. Gale, T., et al. "The State of Sparsity in Deep Neural Networks." arXiv:1902.09574, 2019.
+6. Mishra, A., et al. "Accelerating Sparse Deep Neural Networks." arXiv:2104.08378, 2021.

@@ -100,7 +100,7 @@ AI芯片（NPU）区别于传统处理器的根本原因在于：**神经网络�
 
 1. Jouppi, N. P., et al. "In-Datacenter Performance Analysis of a Tensor Processing Unit." *Proceedings of the 44th Annual International Symposium on Computer Architecture (ISCA)*, 2017.
 
-2. Chen, Y.-H., Krishna, T., Emer, J., & Sze, V. "Eyeriss: An Energy-Efficient Reconfigurable Accelerator for Deep Convolutional Neural Networks." *Proceedings of the 43rd Annual IEEE/ACM International Symposium on Computer Architecture (ISCA)*, 2016.
+2. Chen, Y.-H., Emer, J., & Sze, V. "Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks." *Proceedings of the 43rd Annual IEEE/ACM International Symposium on Computer Architecture (ISCA)*, 2016.
 
 3. Horowitz, M. "Computing's Energy Problem (and what we can do about it)." *IEEE International Solid-State Circuits Conference (ISSCC) Digest of Technical Papers*, 2014.
 

@@ -288,12 +288,17 @@ def main() -> None:
     # ---- Analysis ----
     print("\nKey observations:")
     for r in results:
-        ratio = r["per_tensor_mse"] / max(r["per_channel_mse"], 1e-30)
-        print(
-            f"  {r['method'].upper()}: Per-Channel reduces MSE by "
-            f"{(ratio - 1) * 100 if ratio > 1 else (1 - 1/ratio) * 100:.1f}% "
-            f"vs Per-Tensor."
-        )
+        # Percentage change in MSE relative to per-tensor:
+        #   (per_tensor - per_channel) / per_tensor * 100
+        # Positive => per-channel improves (reduces) MSE.
+        # Negative => per-channel is worse on this tensor/method.
+        ratio = r["per_channel_mse"] / max(r["per_tensor_mse"], 1e-30)
+        change = (1.0 - ratio) * 100.0
+        if change >= 0:
+            verdict = f"reduces MSE by {change:.1f}%"
+        else:
+            verdict = f"increases MSE by {-change:.1f}%"
+        print(f"  {r['method'].upper()}: Per-Channel {verdict} vs Per-Tensor.")
 
     # ---- Plot ----
     if args.plot:

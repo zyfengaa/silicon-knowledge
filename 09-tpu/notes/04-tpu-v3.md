@@ -10,17 +10,19 @@ TPU v3 于 2018 年发布，是 TPU v2 的直接后继产品。与 v2 相比，v
 
 TPU v3 对每个核心的矩阵乘法单元进行了倍增。在 v2 中，每个核心拥有 1 个 MXU（128×128 Systolic Array）。在 v3 中，每个核心拥有 **2 个 MXU**。因此，一个芯片（2 个核心）共计 4 个 MXU。
 
-每个 MXU 的规格与 v2 保持一致：128×128 的 BF16 乘法阵列，FP32 累加。因此 v3 单芯片的理论 BF16 计算峰值是 v2 的 2 倍：
+每个 MXU 的规格与 v2 保持一致：128×128 的 BF16 乘法阵列，FP32 累加。单芯片共 4 个 MXU，理论 BF16 峰值约为：
 
 $$
-\text{TPU v3 单芯片峰值} \approx 2 \times \text{TPU v2 单芯片峰值} \approx 420 \text{ TFLOPS}
+4 \times 16,384 \times 940 \text{ MHz} \times 2 \approx 123 \text{ TFLOPS}
 $$
+
+这约为 v2 单芯片（45 TFLOPS）的 2.7 倍，而不是 2 倍；公开资料中常见的 420 TFLOPS 是 **v3-8 板卡（8 颗芯片）** 的标称值，不能当作单芯片性能。
 
 这一增长不仅来自 MXU 数量的翻倍，也来自工作频率的小幅提升（从 v2 的 700 MHz 提升至 v3 的 940 MHz 左右）。
 
 ### 2.2 HBM 容量与带宽翻倍
 
-TPU v3 的 HBM 配置从 v2 的 16 GB 每芯片（每个核心 8 GB）提升至 **32 GB 每芯片（每个核心 16 GB）**，同时 HBM 带宽也从约 600 GB/s 翻倍至约 1,200 GB/s。
+TPU v3 的 HBM 配置从 v2 的 16 GB 每芯片（每个核心 8 GB）提升至 **32 GB 每芯片（每个核心 16 GB）**，同时 HBM 带宽也从约 600 GB/s 提升至约 **900 GB/s**。
 
 HBM 容量的增加对于训练大模型至关重要。以 Transformer 类模型为例，大模型通常需要存储：
 
@@ -44,11 +46,11 @@ $$
 
 ## 3. 液冷全面化
 
-TPU v2 中，水冷仅用于完整的 64-chip pod 配置，部分小型部署仍使用风冷。而在 TPU v3 中，由于 MXU 翻倍带来的功耗增长，**液冷成为所有部署的标准配置**。
+TPU v2 采用风冷；而在 TPU v3 中，由于 MXU 翻倍带来的功耗增长，**液冷成为所有部署的标准配置**，v3 也是 Google 首个大规模采用液冷的 TPU 代际。
 
 ### 3.1 热设计功耗
 
-TPU v3 单芯片的 TDP 约为 450W，是 v2（约 200–250W）的近两倍。在 64-chip pod 配置下，一个 pod 的总散热需求约为：
+TPU v3 单芯片的 TDP 约为 450W，是 v2（约 280W）的约 1.6 倍。在 64-chip pod 配置下，一个 pod 的总散热需求约为：
 
 $$
 P_{\text{pod}} = 64 \times 450 \text{ W} = 28.8 \text{ kW}
@@ -73,7 +75,7 @@ TPU v3 的 pod 结构延续了 v2 的设计但规模更大：
 1024-chip superpod 的总计算能力约为：
 
 $$
-P_{\text{superpod}} = 1024 \times 420 \text{ TFLOPS} = 430 \text{ PFLOPS}
+P_{\text{superpod}} = 1024 \times 123 \text{ TFLOPS} \approx 126 \text{ PFLOPS}
 $$
 
 这一算力在 2018 年发布时位居当时 AI 训练集群的前列。
@@ -86,13 +88,12 @@ $$
 |-----|-----------------|-----------------|--------|
 | ResNet-50 | 11,500 img/s | 23,000 img/s | 2.0× |
 | Transformer Big (NMT) | 18.5 M tokens/s | 37.0 M tokens/s | 2.0× |
-| BERT-Large | 整体提升至 ~2× | — | ~2.0× |
 
 实际测试表明，TPU v3 在深度学习模型的训练吞吐量上达到了 v2 的约 2 倍，基本实现了均匀缩放的设计目标。值得注意的是，这一接近线性的加速比证明 v3 的存储和互联带宽增长充分支持了计算资源的倍增，未形成新的瓶颈。
 
 ## 参考文献
 
-1. Jouppi, N. P., et al. "A Domain-Specific Supercomputer for Training Deep Neural Networks." *Proceedings of the 45th Annual International Symposium on Computer Architecture (ISCA)*, 2018, pp. 1–14.
+1. Jouppi, N. P., et al. "A Domain-Specific Supercomputer for Training Deep Neural Networks." *Communications of the ACM*, vol. 63, no. 7, 2020, pp. 67–78.
 2. Jouppi, N. P., et al. "Ten Lessons from Three Generations Shaped Google's TPUv4i." *Proceedings of the 48th Annual International Symposium on Computer Architecture (ISCA)*, 2021, pp. 1–14.
 3. Barroso, L. A., et al. "The Datacenter as a Computer: Designing Warehouse-Scale Machines." *Synthesis Lectures on Computer Architecture*, 3rd ed., Morgan & Claypool, 2018.
 4. Pemberton, N., and Somasundaram, S. "Liquid Cooling in Google's Data Centers." *Google Cloud White Paper*, 2019.

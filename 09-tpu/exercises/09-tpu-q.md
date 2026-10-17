@@ -122,14 +122,14 @@ out = jnp.sum(z, axis=1)
 
 | 维度 | v1 | v2 | v3 | v4 | v5p |
 |-----------|----|----|----|----|-----|
-| MAC 数量 | 65,536 (INT8) | 32,768 (BF16 每个 MXU, 2 个 MXU) | 65,536 (BF16 每个 MXU, 4 个 MXU) | ~131K (BF16, 每核心 4 个 MXU, 2 核心) | ~262K (估计) |
-| 片上内存 | 28 MB UB + 4 MB FIFO | ~12 MB (寄存器+缓存) | ~30 MB (估计) | ~44 MB (估计) | ~60 MB (估计) |
-| DRAM/HBM 容量 | 8 GB DDR3 | 16 GB HBM | 32 GB HBM | 32 GB HBM | 95 GB HBM |
-| DRAM/HBM 带宽 | ~34 GB/s (DDR3) | ~600 GB/s | ~900 GB/s | ~1200 GB/s | ~1600 GB/s (估计) |
-| INT8 TOPS | 92 TOPS | N/A (主要为 BF16) | N/A | ~275 TOPS | ~500 TOPS (估计) |
+| MAC 数量 | 65,536 (INT8) | 32,768 (2 个 MXU × 16,384) | 65,536 (4 个 MXU × 16,384) | 131,072 (8 个 MXU × 16,384；v4/v5p 的单个 MXU 仍为 128×128) | 131,072 (8 个 MXU × 16,384，约 1.75 GHz) |
+| 片上内存 | 28 MiB = 24 MiB UB + 4 MiB 权重 FIFO | ~64 MiB（32 MiB/核） | ~64 MiB 量级（估计） | N/A（未公开统一口径） | N/A（未公开统一口径） |
+| DRAM/HBM 容量 | 8 GB DDR3 | 16 GB HBM | 32 GB HBM | 32 GiB HBM2e | 95 GiB HBM3 |
+| DRAM/HBM 带宽 | ~34 GB/s (DDR3) | ~600 GB/s | ~900 GB/s | ~1.2 TB/s | 2,765 GB/s |
+| INT8 TOPS | 92 TOPS | N/A (主要为 BF16) | N/A | ~275 TOPS | 918 TOPS |
 | BF16 TFLOPS | N/A | 45 TFLOPS | 123 TFLOPS | 275 TFLOPS | 459 TFLOPS |
-| Die TDP | 75 W | 280 W | 450 W | ~400 W (估计) | ~400 W (估计) |
-| 芯片间互联 | PCIe Gen3 x16 | 2D Torus (定制) | 2D Torus (定制) | OCS (光) + 2D Torus | OCS + 2D Torus |
+| Die TDP | 75 W | 280 W | 450 W | N/A（未公开） | N/A（未公开） |
+| 芯片间互联 | PCIe Gen3 x16 | 2D Torus (定制) | 2D Torus (定制) | OCS (光) + 3D Torus | OCS (光) + 3D Torus |
 
 **后续问题答案：**
 
@@ -151,7 +151,9 @@ out = jnp.sum(z, axis=1)
 
 - **可编程性**：MXU 完全由 XLA 编译器控制——程序员无法直接访问。Tensor Core 可通过 cuBLAS、cuDNN、CUDA C++（wmma API）和 Triton 访问，提供更多灵活性。
 
-**2b) 2x2 MXU 脉动阵列状态图（C = A x B）：**
+**2b) 2x2 MXU 脉动阵列状态图（C = A x B，权重固定）：**
+
+采用权重固定（WS）：PE[k][j] 预加载 $B[k][j]$；A 的元素按归约维 k 送入对应行，并在该行内广播到各列；部分和沿列方向向下传递。
 
 ```
 权重（B）预先加载：
@@ -159,29 +161,29 @@ out = jnp.sum(z, axis=1)
   PE[1,0] 存储 b21    PE[1,1] 存储 b22
 
 周期 1：
-  输入 a11 从左侧进入。
-  PE[0,0]：temp = a11 * b11，部分和 = temp，向右传递到 PE[0,1]
-  PE[0,1]：接收 temp，临时存储
-  PE[1,0], PE[1,1] 空闲
+  第 0 行接收 a11。
+  PE[0,0]：p = a11*b11，向下传递给 PE[1,0]
+  PE[0,1]：p = a11*b12，向下传递给 PE[1,1]
+  PE[1,0]、PE[1,1] 等待上方部分和及下一行输入。
 
 周期 2：
-  输入 a12 从左侧进入。
-  PE[0,0]：temp = a12 * b11，部分和 = temp，向右传递到 PE[0,1]
-  PE[0,1]：temp2 = a11 * b12，和 = temp + temp2，向下传递到 PE[1,1]
-  输入 a21 从左上进入。
-  PE[0,0] 也将 a21 向下传递到 PE[1,0]
+  第 0 行接收 a21；第 1 行接收 a12（相对第 0 行错开一拍）。
+  PE[0,0]：p = a21*b11，向下传递
+  PE[0,1]：p = a21*b12，向下传递
+  PE[1,0]：a11*b11（来自上方）+ a12*b21 = c11，输出
+  PE[1,1]：a11*b12（来自上方）+ a12*b22 = c12，输出
 
 周期 3：
-  PE[0,0]：（无新输入，a11 和 a12 已传递）
-  PE[1,0]：temp = a21 * b21，向右传递到 PE[1,1]
-  PE[0,1]：temp2 = a12 * b12，和 = temp + temp2，向下传递到 PE[1,1]
+  第 1 行接收 a22。
+  PE[1,0]：a21*b11（来自上方）+ a22*b21 = c21，输出
+  PE[1,1]：a21*b12（来自上方）+ a22*b22 = c22，输出
 
-周期 4：
-  PE[1,1]：从上方（PE[0,1]）和左侧（PE[1,0]）累加
-  最终结果：C = [[c11, c12], [c21, c22]]
+最终结果：C = [[c11, c12], [c21, c22]]
   其中 c11 = a11*b11 + a12*b21, c12 = a11*b12 + a12*b22
-        c21 = a21*b11 + a22*b21, c22 = a21*b12 + a22*b22
+       c21 = a21*b11 + a22*b21, c22 = a21*b12 + a22*b22
 ```
+
+注意：这里只追踪了数据流和累加关系，未计入阵列的流水线填充/排空延迟；输出在周期 2、3 依次出现，总延迟取决于具体实现。
 
 **2c) 各自何时优于对方：**
 
@@ -195,13 +197,13 @@ Tensor Core 的优势在于：工作负载需要动态控制流、不规则操�
 
 **3a) 物理机制：**
 
-OCS 使用 MEMS（Micro-Electro-Mechanical Systems，微机电系统）反射镜阵列。每个输入光纤的光束照射到一个微型反射镜上，该反射镜可以物理倾斜，将光线反射到特定的输出光纤。当需要改变拓扑时，调整反射镜角度（约需 10 微秒）。光信号携带与电信号相同的数据，但通过交换机时无需任何电处理——因此交换机对协议是透明的（protocol-transparent）。
+OCS 使用 MEMS（Micro-Electro-Mechanical Systems，微机电系统）反射镜阵列。每个输入光纤的光束照射到一个微型反射镜上，该反射镜可以物理倾斜，将光线反射到特定的输出光纤。当需要改变拓扑时，调整反射镜角度（开关约 ≤5 ms，含控制与链路训练的整体重配置约 10 ms 量级）。光信号携带与电信号相同的数据，但通过交换机时无需任何电处理——因此交换机对协议是透明的（protocol-transparent）。
 
 **3b) 相对于固定电互联的优势：**
 
 1. **多租户隔离**：不同租户的流量通过物理上分离的光路径传输。一个租户的大量梯度通信不会导致另一个租户的网络拥塞，而在共享的电网络中这会发生。
 
-2. **容错性**：如果某个芯片或链路发生故障，OCS 可以在微秒级内重新路由绕过故障。在固定的 2D Torus 中，单个芯片故障会破坏环的连续性，需要复杂的软件级解决方案。
+2. **容错性**：如果某个芯片或链路发生故障，OCS 可以在毫秒级内重新路由绕过故障。在固定的 2D Torus 中，单个芯片故障会破坏环的连续性，需要复杂的软件级解决方案。
 
 3. **资源分配灵活性**：在 OCS 之前，物理 TPU Pod（例如 256 个芯片）必须作为一个整体分配给单个任务。任何剩余芯片都不能被其他任务使用。有了 OCS，4096 芯片的 v4 Pod 可以动态分区为任意大小的子集群（例如 1024 + 1024 + 2048），不会产生碎片。
 
@@ -209,13 +211,13 @@ OCS 使用 MEMS（Micro-Electro-Mechanical Systems，微机电系统）反射镜
 
 **3c) 对任务调度的影响：**
 
-OCS 几乎消除了碎片。考虑一个 4096 芯片的 Pod：如果一个任务需要 1000 个芯片，调度器可以精确分配 1000 个芯片，并重新配置 OCS 从这些芯片形成一个连续的 2D Torus。剩余的 3096 个芯片完全可用于其他任务。这显著提高了利用率。
+OCS 几乎消除了碎片。考虑一个 4096 芯片的 Pod：如果一个任务需要 1000 个芯片，调度器可以精确分配 1000 个芯片，并重新配置 OCS 从这些芯片形成一个连续的 3D Torus。剩余的 3096 个芯片完全可用于其他任务。这显著提高了利用率。
 
 对于混合工作负载：大型训练任务 + 小型推理任务可以在同一物理基础设施上共存，OCS 提供严格的性能隔离。
 
 **3d) 局限性：**
 
-OCS 的切换延迟（约 10 微秒）远高于电交换（纳秒级）。这使得 OCS 不适合逐消息或逐批路由。OCS 最适合于不频繁更改的电路交换拓扑（任务级调度）。对于需要在毫秒级粒度进行动态路由的工作负载，混合方法（OCS + 电包交换）可能更优。
+OCS 的切换延迟（开关 ≤5 ms，整体约 10 ms）远高于电交换（亚微秒级）。这使得 OCS 不适合逐消息或逐批路由。OCS 最适合于不频繁更改的电路交换拓扑（任务级调度）。对于需要在毫秒级粒度进行动态路由的工作负载，混合方法（OCS + 电包交换）可能更优。
 
 ---
 
@@ -223,13 +225,13 @@ OCS 的切换延迟（约 10 微秒）远高于电交换（纳秒级）。这使
 
 | 场景 | 更好的选择？ | 理由 |
 |----------|---------------|-----------|
-| 在 1024 芯片上大批量训练稠密 Transformer（100B 参数） | TPU v4/v5p | TPU 的 2D Torus + OCS 在大规模 all-reduce 中提供接近线性的扩展效率。TPU 的 MXU 在 Transformer 层的稠密矩阵乘法方面表现出色。 |
+| 在 1024 芯片上大批量训练稠密 Transformer（100B 参数） | TPU v4/v5p | TPU 的 3D Torus + OCS 在大规模 all-reduce 中提供接近线性的扩展效率。TPU 的 MXU 在 Transformer 层的稠密矩阵乘法方面表现出色。 |
 | BERT-Large 低延迟推理（batch size=1） | GPU（例如 NVIDIA T4/L4） | TPU 针对大批量高吞吐量设计。对于 batch=1 推理，TPU 编译和存储层次结构的开销会增加延迟。GPU + TensorRT 可实现亚毫秒级延迟。 |
 | 训练具有 100B 嵌入表的推荐模型 | TPU v4 | TPU v4 上的 SparseCore 专为嵌入查找（embedding lookups）而设计——这是 TPU 的独特优势。GPU 没有等效的硬件，使得嵌入成为瓶颈。 |
 | 小批量训练 1B 参数 CNN 以快速原型验证 | GPU | TPU 的编译开销需要大批量来摊还。对于小批量快速原型开发，GPU 的即时执行（eager execution）和丰富的调试工具更高效。 |
 | 总参数为 1T 的稀疏 MoE 模型 | TPU v4/v5p | TPU 的高带宽互联（OCS）支持 MoE 路由所需的高效 all-to-all 通信。GPU 集群在 MoE 场景中经常受限于节点间带宽。 |
 | 边缘设备推理（<50W 功耗） | GPU（Jetson 系列） | TPU 是数据中心级硬件，不适用于边缘部署。NVIDIA Jetson 和其他边缘 SoC 专为此功耗范围设计。 |
-| 科学计算（FP64 矩阵运算） | GPU（NVIDIA H100/A100） | TPU 针对机器学习数值格式（BF16、INT8）进行了优化。TPU 的 FP64 性能有限，而 NVIDIA GPU 拥有专用的 FP64 Tensor Core。 |
+| 科学计算（FP64 矩阵运算） | GPU（NVIDIA H100/A100） | TPU 针对机器学习数值格式（BF16、INT8、FP8）进行了优化；TPU v4 明确不支持 FP64，v5p 也不以 FP64 为目标。NVIDIA GPU 拥有专用的 FP64 单元。 |
 | 多模态模型训练 | TPU（如果 Google 内部）或 GPU | TPU 的优势取决于多模态模型的具体架构。如果是基于 Transformer 的模型，TPU 表现出色。如果涉及自定义操作，GPU 的灵活性更好。 |
 
 ---
@@ -267,26 +269,26 @@ XLA 的融合 pass 将（concatenate -> dot -> reduce-sum）分组为单个融�
 **5c) 融合对 TPU 的重要性：**
 
 TPU 的存储层次结构是融合比 GPU 更重要的关键原因：
-- TPU 的 Unified Buffer 有限（v4 上约 28 MB，而 GPU 有数 MB 的 L2 缓存）。
+- TPU v1 的 Unified Buffer 为 24 MiB（另有 4 MiB 权重 FIFO），后续代际的片上 SRAM 也只有数十 MiB 量级，而 GPU 有数 MB 的 L2 缓存。
 - 每次 HBM 读/写的能耗和延迟远高于 UB 访问。
 - TPU **没有** GPU 拥有的复杂多级缓存层次结构（L1, L2, L3）。
 - 因此，将中间结果写入 HBM 再读回的成本极高。
 - 融合使编译器能够将中间值保留在 UB 中，或直接在 MXU 和 VPU 之间传递它们，而无需触碰 HBM。
 - 对于 GPU，L1/L2 缓存有时可以吸收中间流量——但 TPU 需要显式的数据移动管理，这使得融合对于任何可接受的性能都至关重要。
 
-不进行融合时，TPU 程序通常是内存带宽受限的；进行融合后，它变为 MXU 上的计算受限，可实现 80%+ 的硬件利用率。
+不进行融合时，TPU 程序通常是内存带宽受限的；进行融合后，它更容易变为 MXU 上的计算受限，从而获得更高的硬件利用率（具体比例随算子形状和编译质量变化）。
 
 ---
 
 ## 参考文献
 
 1. Jouppi, N. P., et al. "In-Datacenter Performance Analysis of a Tensor Processing Unit." ISCA'17.
-2. Jouppi, N. P., et al. "A Scalable Architecture for Cloud TPU." ISCA'18.
+2. Jouppi, N. P., et al. "A Domain-Specific Supercomputer for Training Deep Neural Networks." *Communications of the ACM*, 63(7), 2020.
 3. Jouppi, N. P., et al. "TPU v4: An Optically Reconfigurable Supercomputer for Machine Learning with Hardware Support for Embeddings." ISCA'23.
 4. Google Cloud TPU Documentation. "TPU System Architecture." https://cloud.google.com/tpu/docs/system-architecture.
-5. Sabne, A., et al. "XLA: Optimizing Machine Learning Compiler." Google Research, 2020.
+5. Sabne, A. "XLA: Compiling Machine Learning for Peak Performance." Google Research, 2020.
 6. Mark, H., et al. "Mixed Precision Training." ICLR'18.
 7. Jia, Z., et al. "Beyond Data and Model Parallelism for Deep Neural Networks." SysML'19.
 8. Farrington, N., and Porter, G. "Optical Data Center Networks." ACM SIGCOMM'13.
 9. NVIDIA. "Tensor Core Performance: The Ultimate Guide." NVIDIA Developer Blog.
-10. Google Cloud Blog. "TPU v5p: A New Generation of Custom Machine Learning Hardware." 2024.
+10. Google Cloud Blog. "Introducing Cloud TPU v5p: The Most Powerful, Scalable AI Accelerator." 2023.
