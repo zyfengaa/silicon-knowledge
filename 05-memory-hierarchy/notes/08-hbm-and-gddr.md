@@ -42,16 +42,18 @@ HBM 将多个 DRAM 芯片垂直堆叠，通过 **TSV（Through-Silicon Via，硅
 
 ### HBM 各代参数
 
-| 特性 | HBM1 | HBM2 | HBM2e | HBM3 |
-|------|------|------|-------|------|
-| 最大传输速率 | 1 GT/s | 2 GT/s | 3.2 GT/s | 6.4 GT/s |
-| 单堆栈带宽 | 128 GB/s | 256 GB/s | 410 GB/s | 820 GB/s |
-| 单堆栈容量 | 1 GB | 8 GB | 16 GB | 16–32 GB（典型 16/24 GB；HBM3E 可达 36 GB） |
-| 最大堆栈高度 | 4-Hi | 8-Hi (1 GB/Die) | 12-Hi | 16-Hi |
-| 数据总线宽度 | 1024 bit | 1024 bit | 1024 bit | 1024 bit（16 通道 × 64 bit） |
-| 电压 | 1.3 V | 1.2 V | 1.2 V | 1.1 V |
-| 功耗 | ~4 W/栈 | ~8 W/栈 | ~10 W/栈 | ~12 W/栈 |
-| 每引脚带宽效率 | 高 | 高 | 高 | 极高（NRZ，高引脚速率） |
+| 特性 | HBM1 | HBM2 | HBM2e | HBM3 | HBM3E | HBM4 |
+|------|------|------|-------|------|-------|------|
+| 最大传输速率 | 1 GT/s | 2 GT/s | 3.2 GT/s | 6.4 GT/s | 8–9.6 Gb/s | 8 Gb/s（JEDEC 基线） |
+| 单堆栈带宽 | 128 GB/s | 256 GB/s | 410 GB/s | 820 GB/s | ~1.2 TB/s | ~2 TB/s |
+| 单堆栈容量 | 1 GB | 8 GB | 16 GB | 16–32 GB（典型 16/24 GB） | 24–36 GB | 24–64 GB（16-Hi × 24/32 Gb） |
+| 最大堆栈高度 | 4-Hi | 8-Hi (1 GB/Die) | 12-Hi | 16-Hi | 12-Hi / 16-Hi | 16-Hi |
+| 数据总线宽度 | 1024 bit | 1024 bit | 1024 bit | 1024 bit（16 通道 × 64 bit） | 1024 bit | **2048 bit** |
+| 电压 | 1.3 V | 1.2 V | 1.2 V | 1.1 V | 1.1 V | ~1.0–1.1 V（依实现） |
+| 功耗 | ~4 W/栈 | ~8 W/栈 | ~10 W/栈 | ~12 W/栈 | ~12–15 W/栈（估算） | 更高（未公开） |
+| 每引脚带宽效率 | 高 | 高 | 高 | 极高（NRZ，高引脚速率） | 极高 | 极高（2048-bit 宽接口） |
+
+HBM4 的最大结构变化是接口位宽从 1024-bit 翻倍到 **2048-bit**。在引脚速率与 HBM3E 相近的情况下，单堆栈带宽因此达到约 2 TB/s；16-Hi 堆叠和 24/32 Gb die 让单堆栈容量进入 24–64 GB 区间。代价是需要 CoWoS-L、混合键合等更复杂的封装，封装产能与良率是主要瓶颈。
 
 **HBM3 的改进**：
 - 采用 **NRZ 信令**，通过提高引脚速率（6.4 Gb/s）获得带宽；PAM-4 等更高阶调制是后续世代的研究方向，并非 HBM3 标准本身
@@ -67,6 +69,26 @@ HBM 将多个 DRAM 芯片垂直堆叠，通过 **TSV（Through-Silicon Via，硅
 | **低功耗**：每比特传输能耗远低于 GDDR | **容量受限**：单堆栈容量受堆叠高度与 Die 密度限制（HBM3 最高 32 GB，HBM3E 可达 36 GB） |
 | **小尺寸**：2.5D/3D 封装节省 PCB 空间 | **集成复杂**：需要中介层和先进封装 |
 | **距离近**：与 GPU/CPU 在同一封装内 | **标准化**：JEDEC 标准，不开放定制 |
+
+### 堆栈数量与容量上限
+
+GPU 能装多少 HBM，不只取决于单堆栈容量，还取决于芯片周围能放多少个堆栈：
+
+| GPU | HBM 堆栈数 | 总容量 | 总位宽 |
+|-----|-----------|--------|--------|
+| V100 32GB | 4 | 32 GB（4 × 8 GB） | 4,096-bit |
+| A100 80GB | 5 | 80 GB（5 × 16 GB） | 5,120-bit |
+| H100 80GB | 5 | 80 GB（5 × 16 GB） | 5,120-bit |
+| H200 141GB | 6 | 141 GB 可用（6 × 24 GB） | 6,144-bit |
+| B200 | 8 | 192 GB（8 × 24 GB） | 8,192-bit |
+| GB300/B300 | 8 | 288 GB（8 × 36 GB） | 8,192-bit |
+| AMD MI300X | 8 | 192 GB（8 × 24 GB） | 8,192-bit |
+
+A100/H100 80GB 是 **5 个堆栈**，不是传闻中的 6 个；H200 才是 6 个。堆栈数量受芯片面积、CoWoS 中介层尺寸和封装良率限制，不能像 DDR 那样“加条子”。要提升容量，只能增加堆栈数或提高单堆栈密度（8-Hi → 12-Hi → 16-Hi），后者会推高成本、降低良率。
+
+### 成本构成
+
+HBM 的每 GB 成本显著高于 DDR/GDDR，主要来自四部分：DRAM die、TSV 与堆叠、逻辑 base die、CoWoS/中介层与测试。公开估算常在每 GB 10–20 美元量级，但会随世代、容量、合约期和供需大幅波动，不应作为报价依据。先进封装（尤其是 CoWoS）的产能长期是 HBM 供给的瓶颈之一。
 
 ## GDDR（Graphics DDR）
 
@@ -133,7 +155,7 @@ GDDR 是专为图形处理优化的 DDR 内存，与传统 DDR 共享基础架�
 
 ## 未来趋势
 
-1. **HBM 持续演进**：HBM4 预计 2026–2027，接口提升到 2048-bit，引脚速率继续提高，Die 密度进入 24/32 Gb 级
+1. **HBM 持续演进**：HBM4 进入量产爬坡（2026–2027），关键参数见上表；下一步是更高堆叠与封装密度
 2. **GDDR7 普及**：2025 年开始在消费级 GPU 普及
 3. **CXL 内存扩展**：通过 CXL 协议连接的池化内存，弥合 DRAM 和 SSD 之间的层次
 4. **近内存计算（Processing-in-Memory）**：Samsung HBM-PIM、AIMM 等
@@ -153,6 +175,7 @@ GDDR 是专为图形处理优化的 DDR 内存，与传统 DDR 共享基础架�
 - JEDEC Standard JESD235C: High Bandwidth Memory 2E (HBM2E) Specification.
 - JEDEC Standard JESD238: High Bandwidth Memory 3 (HBM3) Specification.
 - JEDEC Standard JESD238A: High Bandwidth Memory 3E (HBM3E) Specification.
+- JEDEC Standard JESD270-4: High Bandwidth Memory 4 (HBM4) Specification, 2025.
 - JEDEC Standard JESD250: Graphics Double Data Rate 6 (GDDR6) SDRAM Specification.
 - NVIDIA Corporation, "NVIDIA H100 Tensor Core GPU Architecture", Whitepaper, 2022.
 - AMD, "AMD CDNA 3 Architecture Instruction Set Architecture", Whitepaper, 2023.

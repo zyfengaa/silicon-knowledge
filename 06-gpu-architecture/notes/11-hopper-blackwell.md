@@ -120,6 +120,10 @@ TMEM 的意义在于把累加器从寄存器压力中解放出来，使更大的
 - 更强的 RAS 特性与安全启动；
 - 更大的 L2（126 MB）和 HBM3e 带宽（8 TB/s），缓解内存墙。
 
+### 2.5 Blackwell Ultra（GB300/B300）
+
+Blackwell Ultra 沿用 B200 的 `tcgen05`、TMEM 与 FP4/FP6 能力，只做规格增强（更多 SM、更大 HBM3e、更高 FP4 吞吐），没有新的编程模型。具体规格与 Rubin 路线图见 [09 NVIDIA 架构演进](09-nvidia-evolution.md)。
+
 ---
 
 ## 3. GB200 NVL72
@@ -127,9 +131,11 @@ TMEM 的意义在于把累加器从寄存器压力中解放出来，使更大的
 GB200 NVL72 是一个机架级系统：
 
 - 72 个 Blackwell GPU + 36 个 Grace CPU；
-- 通过第 5 代 NVLink/NVSwitch 实现机架内全互联，每 GPU 1.8 TB/s；
-- 对软件呈现为一个大的 NVLink 域，可用 NCCL 做跨 72 GPU 的集合通信；
+- 通过第 5 代 NVLink 与 **18 颗 NVSwitch 4（9 个交换托盘）** 实现机架内全互联，每 GPU 1.8 TB/s，整柜聚合带宽约 **130 TB/s**；
+- 72 张 GPU 的 HBM 合计 **13.8 TB**（72 × 192 GB），对软件呈现为一个大的 NVLink 域，可用 NCCL 做跨 72 GPU 的集合通信；
 - 与 InfiniBand/Ethernet 的跨机架 scale-out 网络配合使用。
+
+NVSwitch 芯片的端口数、单端口带宽和 NVLink 域上限见 [08 GPU 互联](08-gpu-interconnect.md) §3；本篇不重复展开。
 
 它体现了"scale-up（NVLink 域内） + scale-out（网络）"的两级互连设计。
 
@@ -152,3 +158,5 @@ GB200 NVL72 是一个机架级系统：
 - NVIDIA, *CUDA C++ Programming Guide*: Asynchronous Data Copies, TMA, Thread Block Clusters, Warpgroup Matrix Multiply.
 - NVIDIA, *PTX ISA*: `cp.async.bulk`, `wgmma`, `tcgen05` 指令说明.
 - NVIDIA, *CUTLASS Documentation*: Hopper/Blackwell kernels.
+- NVIDIA, *NVIDIA GB200 NVL72 System Architecture*, 2024. — 18 颗 NVSwitch、13.8 TB 统一显存与整柜带宽.
+- NVIDIA, *GTC 2025 Keynote*, 2025. — Blackwell Ultra 与 Rubin 路线图.

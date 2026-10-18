@@ -15,23 +15,25 @@
 
 ## 1. NVIDIA 数据中心 GPU
 
-| 项目 | V100 SXM | A100 SXM 80GB | H100 SXM | H200 SXM | B200 |
-|------|----------|---------------|----------|----------|------|
-| 架构 | Volta | Ampere | Hopper | Hopper | Blackwell |
-| 工艺 | TSMC 12nm | TSMC 7nm | TSMC 4N | TSMC 4N | TSMC 4NP（双 die） |
-| SM 数 | 84 | 108 | 132 | 132 | 148（公开资料另有约 160 之说） |
-| FP32 CUDA Core | 5,376 | 6,912 | 16,896 | 16,896 | 18,944（按 148 SM 推算） |
-| L2 | 6 MB | 40 MB | 50 MB | 50 MB | 126 MB |
-| 显存 | 32 GB HBM2 | 80 GB HBM2e | 80 GB HBM3 | 141 GB HBM3e | 192 GB HBM3e |
-| 显存带宽 | 900 GB/s | 2,039 GB/s | 3.35 TB/s | 4.8 TB/s | 8 TB/s |
-| FP32 | 15.7 TFLOPS | 19.5 TFLOPS | 67 TFLOPS | 67 TFLOPS | ~80 TFLOPS（推算） |
-| FP16/BF16 Tensor（dense） | 125 TFLOPS | 312 TFLOPS | 989 TFLOPS | 989 TFLOPS | 2,250 TFLOPS |
-| FP8 Tensor（dense） | — | — | 1,979 TFLOPS | 1,979 TFLOPS | 4,500 TFLOPS |
-| FP4 Tensor（dense） | — | — | — | — | 9,000 TFLOPS |
-| GPU 间互联 | NVLink 2 | NVLink 3 | NVLink 4 | NVLink 4 | NVLink 5 |
-| TDP | 300 W | 400 W | 700 W | 700 W | 1,000 W |
+| 项目 | V100 SXM | A100 SXM 80GB | H100 SXM | H200 SXM | B200 | B300/GB300 | Rubin（路线图） |
+|------|----------|---------------|----------|----------|------|------------|----------------|
+| 架构 | Volta | Ampere | Hopper | Hopper | Blackwell | Blackwell Ultra | Vera Rubin |
+| 工艺 | TSMC 12nm | TSMC 7nm | TSMC 4N | TSMC 4N | TSMC 4NP（双 die） | TSMC 4NP（双 die） | 未公开（公开报道称 3nm） |
+| SM 数 | 84 | 108 | 132 | 132 | 148（公开资料另有约 160 之说） | 160 | 未公开 |
+| FP32 CUDA Core | 5,376 | 6,912 | 16,896 | 16,896 | 18,944（按 148 SM 推算） | 20,480（按 160 SM 推算） | 未公开 |
+| L2 | 6 MB | 40 MB | 50 MB | 50 MB | 126 MB | 126 MB（沿用 GB100） | 未公开 |
+| 显存 | 32 GB HBM2 | 80 GB HBM2e | 80 GB HBM3 | 141 GB HBM3e | 192 GB HBM3e | 288 GB HBM3e | HBM4（容量未公开；公开报道 288 GB 级） |
+| 显存带宽 | 900 GB/s | 2,039 GB/s | 3.35 TB/s | 4.8 TB/s | 8 TB/s | 8 TB/s | ~13 TB/s（厂商口径） |
+| FP32 | 15.7 TFLOPS | 19.5 TFLOPS | 67 TFLOPS | 67 TFLOPS | ~80 TFLOPS（推算） | ~86 TFLOPS（推算） | 未公开 |
+| FP16/BF16 Tensor（dense） | 125 TFLOPS | 312 TFLOPS | 989 TFLOPS | 989 TFLOPS | 2,250 TFLOPS | 未公开（按 SM 数推算约 1.1×） | 未公开（官方只给相对口径） |
+| FP8 Tensor（dense） | — | — | 1,979 TFLOPS | 1,979 TFLOPS | 4,500 TFLOPS | 未公开（按 SM 数推算约 1.1×） | 未公开 |
+| FP4 Tensor（dense） | — | — | — | — | 9,000 TFLOPS | 约 B200 的 1.5×（厂商口径） | 未公开 |
+| GPU 间互联 | NVLink 2 | NVLink 3 | NVLink 4 | NVLink 4 | NVLink 5 | NVLink 5 | NVLink 6（路线图） |
+| TDP | 300 W | 400 W | 700 W | 700 W | 1,000 W | 1,400 W | ~1,800 W（厂商口径） |
 
 B200 由两个计算 die 通过 **NV-HBI（10 TB/s）** 组成一个逻辑 GPU。NVIDIA 的架构 brief 未逐项确认 B200 的 SM 数，公开资料存在 148 与约 160 两种说法；B300/GB300 为 160 SM。表中 B200 行按 148 SM 计。
+
+B300/GB300 与 Rubin 的数字来自厂商发布和公开路线图。Rubin 尚未量产，绝对算力、容量与功耗应以最终产品规格为准；NVIDIA 对 Rubin 主要给出“相对 Blackwell 约 3.3×（推理）”这类相对口径。
 
 消费级参考：RTX 4090 为 16,384 CUDA Core、24 GB GDDR6X、384-bit、1,008 GB/s。
 
@@ -113,6 +115,7 @@ WSE-2/WSE-3 的功耗是**整机系统**口径，不是单芯片；不同来源�
 | HBM2e | 3.2 Gb/s | 1024-bit | ~410 GB/s/堆栈 | 8–16 GB/堆栈 | 2.5D 封装 |
 | HBM3 | 6.4 Gb/s | 1024-bit | ~820 GB/s/堆栈 | 16–32 GB/堆栈 | NRZ，16×64-bit 通道 |
 | HBM3E | 8–9.6 Gb/s | 1024-bit | ~1.2 TB/s/堆栈 | 24–36 GB/堆栈 | 12-Hi × 24 Gb 可达 36 GB |
+| HBM4 | 8 Gb/s（JEDEC 基线） | 2048-bit | ~2 TB/s/堆栈 | 24–64 GB/堆栈 | 16-Hi，24/32 Gb die；CoWoS-L/混合键合 |
 
 ### 5.2 互连
 
@@ -130,6 +133,20 @@ WSE-2/WSE-3 的功耗是**整机系统**口径，不是单芯片；不同来源�
 | NVLink-C2C (Grace Hopper) | — | — | — | 900 GB/s |
 
 PCIe 1.0–5.0 使用 128b/130b 编码；PCIe 6.0 改用 PAM4、FLIT 和 FEC。表中 PCIe 数字为**原始线路速率折算后的有效载荷近似值**，不同编码与开销会带来差异。
+
+### 5.3 NVSwitch 与 NVLink 域
+
+| 项目 | NVSwitch 3 | NVSwitch 4 |
+|------|-----------|-----------|
+| 端口数 | 64 | 72 |
+| 单端口双向带宽 | 50 GB/s | 100 GB/s |
+| 单芯片聚合带宽 | ~3.2 TB/s | ~7.2 TB/s |
+| 典型部署 | DGX H100：4 颗 | GB200/GB300 NVL72：18 颗（9 个托盘） |
+| 单 NVLink 域上限 | 8 GPU | 72 GPU |
+
+NVLink 域上限随代际扩大：H100 8 卡、NVL72 72 卡、Rubin NVL144、Rubin Ultra NVL576（后两者为路线图）。域内走 NVLink/NVSwitch，域间走 InfiniBand 或以太网；DGX SuperPOD 的 256 卡是 32 个 8 卡节点经 IB 互联，不是 256 卡 NVLink 全互联。
+
+UALink 1.0 的端口速率为 800 Gb/s（100 GB/s 单向），ESUN 是 OCP 下基于以太网的 scale-up 工作流；两者都是 NVLink 之外的开放方案。NVLS（NVLink SHARP）在 NVSwitch 内完成集合通信归约，跨机的对应能力是 InfiniBand SHARP（NCCL 中的 CollNet）。
 
 ---
 

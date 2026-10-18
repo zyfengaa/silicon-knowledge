@@ -50,13 +50,15 @@
 
 Tensor Core 则是另一条通路，它支持的格式随代际扩展：
 
-| 代际 | 架构 | 新增的硬件精度支持 |
-|------|------|-------------------|
-| 第 1 代 | Volta (2017) | FP16 输入 + FP32 累加 |
-| 第 2 代 | Turing (2018) | INT8、INT4、INT1 |
-| 第 3 代 | Ampere (2020) | BF16、TF32、FP64 |
-| 第 4 代 | Hopper (2022) | FP8（E4M3 / E5M2） |
-| 第 5 代 | Blackwell (2024) | FP4、FP6（含 MXFP4 / NVFP4 等块缩放格式） |
+| 代际 | 架构 | compute capability | 新增的硬件精度支持 |
+|------|------|--------------------|-------------------|
+| 第 1 代 | Volta (2017) | 7.0 | FP16 输入 + FP32 累加 |
+| 第 2 代 | Turing (2018) | 7.5 | INT8、INT4、INT1 |
+| 第 3 代 | Ampere (2020) | 8.0（GA100）/ 8.6（GA10x） | BF16、TF32、FP64 |
+| 第 4 代 | Hopper (2022) | 9.0 | FP8（E4M3 / E5M2） |
+| 第 5 代 | Blackwell (2024) | 10.0 | FP4、FP6（含 MXFP4 / NVFP4 等块缩放格式） |
+
+FP8 从 Ada（8.9）和 Hopper（9.0）才开始有硬件支持；**Ampere（8.0）只有 BF16/TF32，不支持 FP8**。判断某个 dtype 能否使用，先查 compute capability，再查驱动、PTX 版本和 SKU 是否开放。
 
 “架构支持”不等于“每个 SKU 都开放”：同一代芯片会按产品定位屏蔽部分单元或降低频率，具体以产品规格为准。
 
@@ -258,6 +260,7 @@ FP8 通常也需要缩放（per-tensor 或 per-channel），只是更多由软�
 - Horowitz, M. "Computing's Energy Problem (and what we can do about it)." *ISSCC*, 2014.
 - NVIDIA, *Volta V100 / Ampere A100 / Hopper H100 / Blackwell Architecture Whitepapers*, 2017–2024.
 - NVIDIA, *PTX ISA*（`wgmma`、`tcgen05` 指令形状与块缩放接口）.
+- NVIDIA, *CUDA C++ Programming Guide*, Appendix: Compute Capabilities. — 架构代际与 compute capability 的对应关系.
 - Micikevicius, P. et al. "FP8 Formats for Deep Learning." *arXiv:2209.05433*, 2022.
 - Kalamkar, D. et al. "A Study of BFLOAT16 for Deep Learning Training." *arXiv:1905.12322*, 2019.
 - Rouhani, B. D. et al. "Microscaling Data Formats for Deep Learning." *arXiv:2310.10537*, 2023.

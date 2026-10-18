@@ -98,6 +98,22 @@ TDP 指散热系统需要能够处理的最大功耗，通常不等于实际功�
 | 浸没式冷却 | ~2000W+ | 极高 | 超算 |
 | 液氮/液氦 | 不限 | 极高 | 极限超频 |
 
+### 2.3 机柜级功耗与液冷
+
+芯片级散热能力不等于机柜级散热能力。判断是否需要液冷，要先把功耗分三层：
+
+| 层级 | 例子 | 量级 |
+|------|------|------|
+| GPU TDP | GB300/B300 单卡 | 1,400 W |
+| 整机 | 8×GB300 DGX | 约 14–15 kW |
+| 整柜 | GB200/GB300 NVL72 | 约 132 kW |
+
+风冷的上限通常在每机柜 20–50 kW（取决于厂商与风道）；超过这个密度，空气的体积热容和风道截面成为瓶颈。直接液体冷却（DLC）用冷板把主要热量交给水-乙二醇回路，可支撑约 100–240 kW/柜；浸没式把服务器整体放入介电液，密度更高但改造成本也更高。
+
+风量可以按 $P = \dot m c_p \Delta T$ 估算。取空气密度 1.2 kg/m³、$c_p \approx 1{,}005$ J/(kg·K)、温升 10 °C，1,000 W 只需要约 0.083 m³/s，并不是“飓风级”；风冷的真正极限在整柜几十千瓦时的风道总容量与热隔离，而不是单卡风量。
+
+DLC 的关键运维参数包括 CDU 的供/回液温度（单相约 18–32 °C / 35–50 °C）、流量、压差和泄漏检测；pPUE 通常在 1.02–1.20。液冷不是“更高级的风冷”，它改变的是机房级的散热架构。
+
 ---
 
 ## 3. DVFS (Dynamic Voltage and Frequency Scaling)
@@ -272,3 +288,5 @@ Google 单个数据中心的最好水平约 1.04；其全球 fleet 平均近年�
 5. Borkar, S., & Chien, A. A. (2011). "The Future of Microprocessors." *Communications of the ACM*, 54(5).
 6. Le, H. P. (2012). "Designing Processors for Power Efficiency." *PhD Dissertation, Stanford University*.
 7. Shalf, J. (2020). "The Future of Computing Beyond Moore's Law." *Philosophical Transactions of the Royal Society A*, 378(2166).
+8. ASHRAE. *Water-Cooled Servers: Common Designs, Components, and Processes*. 2021. — 冷板液冷、CDU 供回液温度与运维参数.
+9. Open Compute Project. *Advanced Cooling Solutions (ACS) Project Documentation*. 2023. — 机柜级 DLC 密度与 pPUE 口径.

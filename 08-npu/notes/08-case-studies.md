@@ -172,6 +172,17 @@ Ascend平台配合**CANN（Compute Architecture for Neural Networks）**软件�
 - **TBE（Tensor Boost Engine）**：自定义算子开发框架，支持DSL编写算子。
 - **框架适配**：TensorFlow、PyTorch、MindSpore等框架通过CANN实现Ascend后端。
 
+### 产品代际：910B/910C
+
+| 产品 | FP16 算力 | 显存 | 互联 | 状态 |
+|------|-----------|------|------|------|
+| Ascend 910B | 约 320 TFLOPS | 64 GB HBM2e | HCCS | 2023–2024 规模部署 |
+| Ascend 910C | 约 640–800 TFLOPS | 约 128 GB HBM | HCCS | 2025 年起部署 |
+
+> 910B/910C 没有完整的官方数据表，表中数字来自公开拆解与厂商口径，存在争议；引用时应标注来源与不确定性。910C 采用双 die 封装的说法也来自公开报道，未获官方逐项确认。软件侧通过 CANN + torch_npu 接入 PyTorch，但 DeepSpeed/Megatron 的高级分布式特性仍需适配。
+
+单卡规格之外，昇腾通过 HCCS 把多个 NPU 组织成更大的 scale-up 域，再用系统规模弥补单卡差距；这属于系统级设计，不能简单用单卡 TFLOPS 对比。
+
 ## 对比总结
 
 | 芯片 | 计算单元 | 片上存储 | 数据流 | 目标场景 |
@@ -194,3 +205,5 @@ Ascend平台配合**CANN（Compute Architecture for Neural Networks）**软件�
 8. Sze, V., Chen, Y.-H., Yang, T.-J., & Emer, J. "Efficient Processing of Deep Neural Networks: A Tutorial and Survey." Proceedings of the IEEE, 2017.
 9. Chen, Y., et al. "DaDianNao: A Machine-Learning Supercomputer." MICRO 2014.
 10. Du, Z., et al. "ShiDianNao: Shifting Vision Processing Closer to the Sensor." ISCA 2015.
+11. Huawei. "CANN (Compute Architecture for Neural Networks) Documentation." Huawei Developer Documentation, 2024.
+12. Huawei. "Ascend 910B/910C Product Materials and Public Teardowns." 2023–2025. — 产品规格来自公开拆解与厂商口径，存在争议.

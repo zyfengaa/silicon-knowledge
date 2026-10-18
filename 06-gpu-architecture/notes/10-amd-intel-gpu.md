@@ -232,10 +232,18 @@ oneAPI 通过 Data Parallel C++ (DPC++) 提供跨厂商的统一编程接口，�
 |------|------|
 | **精度降低但保留精度** | FP64 → FP32 → FP16 → FP8 → FP4/FP6 |
 | **小芯片化** | 单 die 面积受限，chiplet 多 die 集成 |
-| **显存膨胀** | 80GB（H100）→ 141GB（H200）→ 192GB（MI300X）→ 288GB（MI325X） |
+| **显存膨胀** | 80GB（H100）→ 141GB（H200）→ 192GB（MI300X）→ 256GB（MI325X）→ 288GB（MI355X） |
 | **复杂度上升** | 从 ~3B（Fermi）到 ~208B（Blackwell）晶体管 |
 | **开放生态竞争** | CUDA vs ROCm vs oneAPI |
 | **稀疏计算** | 2:4 结构化稀疏成为标准配置 |
+
+### 端到端差距与选型
+
+单卡 TFLOPS 不能直接换算成集群吞吐。以 MI300X 与 H100 为例，MI300X 在显存容量（192 GB vs 80 GB）、HBM 带宽（5.3 TB/s vs 3.35 TB/s）和原生 FP8 上并不吃亏，但公开的端到端训练对比中常低 20–40%。差距主要来自 ROCm 的算子覆盖与 kernel 成熟度、Infinity Fabric 的拓扑与集合通信效率，而不是 FP8 硬件本身。选型时应看目标模型的端到端吞吐、框架支持度和运维成本，而不是只看峰值。
+
+Intel Gaudi 3 走的是另一条路线：用以太网做 scale-out，以较高的性价比切入推理和部分训练场景，但软件栈（SynapseAI）的生态规模仍小于 CUDA。Google TPU 只通过云服务提供，适合已经在 JAX/XLA 体系内的团队。
+
+国产加速器方面，华为昇腾 910B/910C 通过 CANN + torch_npu 接入 PyTorch，推理部署较成熟，训练侧的高级分布式特性仍在适配。具体产品规格与架构见 [08 NPU 案例研究](../../08-npu/notes/08-case-studies.md)。
 
 ---
 
@@ -249,3 +257,6 @@ oneAPI 通过 Data Parallel C++ (DPC++) 提供跨厂商的统一编程接口，�
 - NVIDIA, *H100 GPU Architecture Whitepaper*, 2022. （作为对比基准）
 - Intel, "Ponte Vecchio: A Many-Core Processor for HPC and AI", *Hot Chips 33*, 2021.
 - AMD, "AMD Instinct MI300 Series Accelerators", *Hot Chips 35*, 2023.
+- AMD, *AMD Instinct MI325X / MI355X Datasheets*, 2024–2025. — 显存容量与产品代际.
+- Intel, *Intel Gaudi 3 AI Accelerator Whitepaper*, 2024. — Gaudi 3 的架构与以太网 scale-out.
+- Huawei, *CANN Documentation*, 2024. — 昇腾软件栈与 torch_npu 适配.

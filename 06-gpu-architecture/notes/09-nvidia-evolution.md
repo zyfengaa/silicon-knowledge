@@ -145,6 +145,21 @@
 - **单个封装内集成两个 die**：通过 **NV-HBI**（10 TB/s die 间互联）连接，对外表现为一个 GPU
   （NVLink-C2C 是 Grace CPU 与 GPU 之间的 900 GB/s 互联，不要与 die 间 NV-HBI 混淆）
 
+### Blackwell Ultra（GB300/B300，2025）—— 显存与低精度推理
+
+Blackwell Ultra 延续 Blackwell 架构，变化主要在规格：B300/GB300 启用 **160 SM**，HBM3e 容量提升到 **288 GB**，TDP 约 **1,400 W**，FP4 吞吐约为 B200 的 **1.5×**（厂商口径）。它面向“单卡装下更大模型”和 FP4 推理，不是新的指令集代际。
+
+### Rubin / Rubin Ultra（2026 / 2027，路线图）
+
+按 NVIDIA GTC 2025 公布的路线图，Rubin 于 2026 年推出，Rubin Ultra 在 2027 年：
+
+- Rubin 采用 **HBM4**，显存带宽约 **13 TB/s**、TDP 约 **1,800 W**（厂商口径）；
+- NVLink 域扩展到 **NVL144**，Rubin Ultra 进一步到 **NVL576**；
+- NVIDIA 只给出相对口径：Rubin 的推理算力约为 Blackwell 的 **3.3×**，未公布可比的绝对 FP8 PFLOPS；
+- 配套网卡进入 **CX-9（1.6 Tb/s/端口）** 级别。
+
+这些是路线图数字，不是已量产规格；引用时应标注“厂商口径/路线图”。NVLink 域与 NVSwitch 的细节见 [08 GPU 互联](08-gpu-interconnect.md)。
+
 ---
 
 ## 3. 代表性 GPU 规格对比
@@ -183,3 +198,4 @@
 - Kirk, D. B. & Hwu, W. W., *Programming Massively Parallel Processors: A Hands-on Approach*, 3rd ed., Appendix: GPU Architecture History, Morgan Kaufmann, 2016.
 - Foley, D. & Danskin, J., "Ultra-Performance Pascal GPU and NVLink", *IEEE Micro*, 2017.
 - NVIDIA, *CUDA C++ Programming Guide*, Appendix: Compute Capabilities, 2024. Available at: docs.nvidia.com/cuda/cuda-c-programming-guide/
+- NVIDIA, *GTC 2025 Keynote: Blackwell Ultra and Rubin Roadmap*, 2025. — B300/GB300 与 Rubin/Rubin Ultra 的厂商路线图口径.

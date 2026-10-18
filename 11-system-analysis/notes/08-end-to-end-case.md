@@ -77,6 +77,12 @@ $$
 
 大模型训练需要存储三类状态：
 
+> **口径说明**：下表采用 **12 B/参数**（BF16 权重 2 + BF16 梯度 2 + FP32 Adam m/v 各 4，不含 FP32 master 权重）。这是可用口径之一，但不是唯一：
+> - **16 B/参数**：标准混合精度，额外包含 FP32 master 权重（4 B）。70B 模型约 1.12 TB，175B 约 2.8 TB；
+> - **8 B/参数**：权重、梯度、动量全部用 BF16，常见于部分 TPU/ZeRO 配置的乐观估算。70B 约 560 GB。
+>
+> 引用显存数字时必须说明采用哪一种口径，否则会得到相差 2 倍的结论。
+
 | 状态 | 数据类型 | 每参数大小 | 175B 的总大小 |
 |------|---------|-----------|-------------|
 | 权重（Weights） | BF16 | 2 bytes | 350 GB |
@@ -90,6 +96,21 @@ $$
 ### 激活值（Activations）
 
 激活值是前向传播中存储的中间结果，用于反向传播时的梯度计算。激活值的大小取决于层数、序列长度、batch size、隐藏维度和并行切分方式；在 GPT-3 这类模型中，每张卡的激活值可能达到数十 GB 量级。具体数值应结合模型配置和 activation checkpointing 策略估算，不宜给出一个固定的“40–60 GB”数字。
+
+### 推理显存与 KV cache
+
+推理的显存账本与训练不同：不需要梯度、优化器状态和大部分激活值，但需要为每个并发序列保存 KV cache。
+
+- **权重**：参数量 × 每参数字节。70B BF16 约 140 GB。
+- **KV cache**：`2 × layers × kv_heads × head_dim × seq_len × batch × bytes_per_elem`。因子 2 对应 K 和 V；使用 GQA/MQA 时 `kv_heads` 远小于注意力头数，这是长上下文能落地的关键。
+
+以 Llama 3 70B 为例（80 层、8 个 KV head、head_dim 128、FP16）：
+
+$$
+2 \times 80 \times 8 \times 128 \times 2 = 327{,}680 \text{ B} \approx 320 \text{ KiB/token}
+$$
+
+128K 上下文、batch=8 时约 **320 GiB**，已经超过权重本身。实际部署还要为碎片、框架开销和临时 buffer 留余量。因此推理集群的显存规划通常是“权重 + KV cache × 并发数”，并通过 PagedAttention、KV 量化、HBM→DRAM→SSD 分层来降低单序列占用。
 
 ## ZeRO 优化器：显存优化的关键
 
@@ -278,3 +299,5 @@ $$
 7. Smith, S., et al. "Using DeepSpeed and Megatron to Train Megatron-Turing NLG 530B, A Large-Scale Generative Language Model." *arXiv:2201.11990*, 2022. — 530B 参数模型的训练经验，包含 3D 并行在大规模下的实际效率分析
 8. Jouppi, N. P., et al. "TPU v4: An Optically Reconfigurable Supercomputer for Machine Learning with Hardware Support for Embeddings." *ISCA 2023*, arXiv:2304.01433. — TPU v4 的正式架构论文
 9. Patterson, D., et al. "Carbon Emissions and Large Neural Network Training." *arXiv:2104.10350*, 2021. — 分析了 GPT-3 训练的碳排放和能耗数据
+10. Kwon, W., et al. "Efficient Memory Management for Large Language Model Serving with PagedAttention." *SOSP 2023*. — KV cache 的分页管理与推理显存估算
+11. Meta AI. "Llama 3 Model Card." 2024. — Llama 3 70B 的层数、KV head 数与上下文长度

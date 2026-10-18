@@ -34,6 +34,15 @@ CPU ─── PCIe ─── GPU
 3. cudaMemcpyDeviceToHost: GPU 显存 → PCIe → CPU 内存
 ```
 
+### GPU-GPU 通信：P2P 与经过 Root Complex 两条路径
+
+多 GPU 服务器里，GPU 之间走 PCIe 有两条不同路径：
+
+- **P2P（Peer-to-Peer）**：GPU 0 直接访问 GPU 1 的 BAR 空间，不经过 CPU 和系统内存。前提是两块 GPU 位于同一 PCIe 交换机或同一 CPU 根端口下，并且芯片组/BIOS 没有用 ACS（Access Control Services）阻断。
+- **非 P2P**：GPU 0 → PCIe → CPU Root Complex → 系统 DDR → CPU Root Complex → PCIe → GPU 1。数据被 CPU 和内存中转，带宽与延迟都明显更差。
+
+`nvidia-smi topo -m` 的输出可以帮助判断：`PIX`/`PXB` 表示同一 PCIe 交换机下的 P2P 路径，`PHB` 表示经过 host bridge，`SYS` 表示跨 NUMA、经过系统内存。启用 IOMMU 或严格的 ACS 策略时，P2P 可能被强制绕到 Root Complex；实际走哪条路径要以拓扑和实测带宽为准，不能只看“都插在 PCIe 上”。
+
 ### PCIe 瓶颈
 
 与 GPU 内部带宽相比，PCIe 的带宽差异巨大：
@@ -155,11 +164,27 @@ NVSwitch 全互联拓扑（每 GPU 连接到所有 NVSwitch）：
          GPU 3 ──┘                └── GPU 7
 ```
 
-DGX H100 中每台服务器有 4 个 NVSwitch，每个 GPU 连接到所有 4 个 NVSwitch，提供 900 GB/s 的总 GPU-GPU 带宽。
+DGX H100 中每台服务器有 4 颗 NVSwitch 3。每张 H100 的 18 条 NVLink 4 链路按 **5+4+4+5** 分配到 4 颗交换芯片上，因此任意两张 GPU 之间都有 900 GB/s（双向）的全带宽路径；对应到交换芯片的 GPU 侧端口占用是 40/32/32/40。
+
+为什么需要交换芯片？8 张卡两两直连需要 $C(8,2)=28$ 对连接，而每张卡只有 18 条链路，分给 7 个对端后每对只剩 2 条，带宽远低于全速。NVSwitch 把链路集中起来做交换，才能让 8 卡（以及 NVL72 的 72 卡）在域内保持全带宽。
 
 ### NVLink 5 与 GB200 NVL72
 
 Blackwell 世代的 NVLink 5 将每 GPU 的双向带宽提升到 1.8 TB/s。GB200 NVL72 通过 NVSwitch 把机架内的 72 个 Blackwell GPU 全互联，使整个机架在逻辑上像一个大型 GPU 一样通信；这是"纵向扩展（scale-up）"与 InfiniBand 的"横向扩展（scale-out）"的分界。
+
+NVSwitch 的代际差异直接决定了 NVLink 域的规模：
+
+| 项目 | NVSwitch 3（Hopper） | NVSwitch 4（Blackwell） |
+|------|---------------------|------------------------|
+| 端口数 | 64 | 72 |
+| 单端口带宽 | 50 GB/s（双向，NVLink 4） | 100 GB/s（双向，NVLink 5） |
+| 单芯片聚合带宽 | 64 × 50 ≈ 3.2 TB/s | 72 × 100 ≈ 7.2 TB/s |
+| 典型部署 | DGX H100：4 颗 | GB200/GB300 NVL72：18 颗（9 个托盘） |
+| 单 NVLink 域上限 | 8 GPU | 72 GPU |
+
+NVLink 域的上限随代际扩大：H100 为 8 卡，NVL72 为 72 卡，Rubin 规划为 NVL144，Rubin Ultra 为 NVL576。**域内**走 NVLink/NVSwitch，**域间**走 InfiniBand 或以太网。DGX SuperPOD 的 256 卡是 32 个 8 卡节点通过 IB 组成的集群，不是"256 卡 NVLink 全互联"。
+
+开放标准方面，UALink 1.0 定义 **800 Gb/s/端口（100 GB/s 单向）** 的加速器 scale-up 互联，ESUN（Ethernet for Scale-Up Networking）则在 OCP 下探索基于以太网的 scale-up；两者都是 NVLink 之外的选项，生态仍在形成。NVLS（NVLink SHARP）让 NVSwitch 在网内完成归约（AllReduce 的 reduce 阶段），跨机的对应能力是 InfiniBand SHARP（NCCL 中的 CollNet）。
 
 另有两个容易混淆的互连：
 
@@ -263,6 +288,8 @@ DGX H100 × 32 节点（256 GPU）
 - **节点间通信**：InfiniBand 提供可扩展的跨节点通信
 - **拓扑感知**：NCCL 自动感知拓扑结构，选择最优通信路径
 
+需要明确：这里的 256 卡**不是** NVLink 全互联。每个 DGX H100 节点内部才是 8 卡 NVLink 域（900 GB/s），节点之间全部经 InfiniBand NDR 400G（约 50 GB/s 单向）。把"SuperPOD 有 256 个 GPU"误读成"256 卡 NVLink 全互联"会高估跨节点带宽一个数量级以上。
+
 ---
 
 ## 参考文献
@@ -276,3 +303,6 @@ DGX H100 × 32 节点（256 GPU）
 - NVIDIA, *CUDA C++ Programming Guide*, Section 3.2: Multiple Devices, Section 3.2.4: Peer-to-Peer Access.
 - NVIDIA, *NVIDIA H100 Tensor Core GPU Architecture*, Section: NVLink and NVSwitch Connectivity.
 - Shoeybi, M. et al., "Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism", *arXiv:1909.08053*, 2019. Section: Model and Data Parallelism.
+- UALink Consortium, *UALink 1.0 Specification*, 2025. — UALink 端口速率与 scale-up 语义.
+- NVIDIA, *NVIDIA GB200 NVL72 System Architecture*, 2024. — NVL72 的 NVSwitch 数量与整柜带宽.
+- Open Compute Project, *Ethernet for Scale-Up Networking (ESUN)*, 2025. — 基于以太网的 scale-up 工作流.
