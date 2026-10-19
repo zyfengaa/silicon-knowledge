@@ -45,23 +45,23 @@
 
 ```
 silicon-knowledge/
-├── 01-digital-logic/        # 数字逻辑基础
-├── 02-isa-and-cpu-basics/   # ISA 与 CPU 基本组成
-├── 03-cpu-pipeline/         # CPU 流水线
-├── 04-cpu-advanced/         # CPU 微架构进阶
-├── 05-memory-hierarchy/     # 存储层次
-├── 06-gpu-architecture/     # GPU 架构
-├── 07-cuda-programming/     # CUDA 编程与优化
-├── 08-npu/                  # NPU 神经网络处理器
-├── 09-tpu/                  # Google TPU
-├── 10-other-accelerators/   # 其他加速器
-├── 11-system-analysis/      # 系统分析与性能工程
-├── projects/                # 综合实践项目
-├── SPECS.md                 # 硬件规格基线（数字口径的单一事实来源）
-├── GLOSSARY.md              # 术语表
-├── ROADMAP.md               # 详细学习路线图
-├── STYLEGUIDE.md            # 写作规范
-└── tools.md                 # 推荐工具清单
+├── 01-数字逻辑基础/              # 数字逻辑基础
+├── 02-指令集与CPU基本组成/       # ISA 与 CPU 基本组成
+├── 03-CPU流水线/                 # CPU 流水线
+├── 04-CPU微架构进阶/             # CPU 微架构进阶
+├── 05-存储层次/                  # 存储层次
+├── 06-GPU架构/                   # GPU 架构
+├── 07-CUDA编程与优化/            # CUDA 编程与优化
+├── 08-NPU神经网络处理器/         # NPU 神经网络处理器
+├── 09-Google-TPU/                # Google TPU
+├── 10-其他加速器/                # 其他加速器
+├── 11-系统分析与性能工程/        # 系统分析与性能工程
+├── 综合实践项目/                 # 综合实践项目
+├── SPECS.md                      # 硬件规格基线（数字口径的单一事实来源）
+├── GLOSSARY.md                   # 术语表
+├── ROADMAP.md                    # 详细学习路线图
+├── STYLEGUIDE.md                 # 写作规范
+└── tools.md                      # 推荐工具清单
 ```
 
 每个模块内部遵循统一结构：
@@ -86,7 +86,7 @@ git clone https://github.com/zyfengaa/silicon-knowledge.git
 cd silicon-knowledge
 
 # 从第一模块开始
-cd 01-digital-logic
+cd 01-数字逻辑基础
 # 阅读 notes/ 目录下的笔记，运行 code/ 目录下的代码
 ```
 

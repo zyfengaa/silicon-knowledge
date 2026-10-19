@@ -91,7 +91,8 @@
 
 ### 文件命名
 
-- 目录和文件名：全小写英文，连字符分隔（`memory-hierarchy`，`cache-organization.md`）
+- 顶层模块目录：`NN-中文名称`（如 `05-存储层次`，编号表示推荐学习顺序）
+- 模块内目录和文件名：全小写英文，连字符分隔（`notes`，`code`，`cache-organization.md`）
 - 笔记编号：`01-topic-name.md`（前导数字表示推荐阅读顺序）
 - 代码文件：标准扩展名（`.c` `.cu` `.py` `.s`）
 
