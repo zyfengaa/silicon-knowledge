@@ -1,6 +1,6 @@
-# 03 — 功耗与散热
+# 03 — 功耗、能效与芯片热设计
 
-> 功耗和散热是制约现代处理器性能的最根本因素。从 Dennard Scaling 的终结到"暗硅"的出现，功耗墙驱动了整个计算机体系结构在过去十五年的变革——从提高单核频率转向多核和领域专用加速。
+> 功耗和散热是制约现代处理器性能的最根本因素。从 Dennard Scaling 的终结到"暗硅"的出现，功耗墙驱动了整个计算机体系结构在过去十五年的变革。本篇聚焦芯片内部的功耗机制、DVFS、暗硅与封装热阻；机房液冷与集群 PUE 见兄弟仓库 `why-ai-cluster`。
 
 ---
 
@@ -98,21 +98,24 @@ TDP 指散热系统需要能够处理的最大功耗，通常不等于实际功�
 | 浸没式冷却 | ~2000W+ | 极高 | 超算 |
 | 液氮/液氦 | 不限 | 极高 | 极限超频 |
 
-### 2.3 机柜级功耗与液冷
+### 2.3 封装热设计：结温、热阻与 TDP 契约
 
-芯片级散热能力不等于机柜级散热能力。判断是否需要液冷，要先把功耗分三层：
+芯片级散热的目标是让结温 Tj 不超过规定上限（常见约 85–105 °C，依器件与寿命预算而定）。稳态下可用一维热阻链近似：
 
-| 层级 | 例子 | 量级 |
-|------|------|------|
-| GPU TDP | GB300/B300 单卡 | 1,400 W |
-| 整机 | 8×GB300 DGX | 约 14–15 kW |
-| 整柜 | GB200/GB300 NVL72 | 约 132 kW |
+```
+Tj = Ta + P × Rth_ja
+Rth_ja = Rth_jc + Rth_ca
+```
 
-风冷的上限通常在每机柜 20–50 kW（取决于厂商与风道）；超过这个密度，空气的体积热容和风道截面成为瓶颈。直接液体冷却（DLC）用冷板把主要热量交给水-乙二醇回路，可支撑约 100–240 kW/柜；浸没式把服务器整体放入介电液，密度更高但改造成本也更高。
+其中 `Rth_jc` 是结到壳（die → TIM → lid）的热阻，`Rth_ca` 是壳到环境（散热器或冷板）的热阻。TDP 可以理解为：在给定热阻与环境温度下，把 Tj 压在限值内所允许的持续功耗。
 
-风量可以按 $P = \dot m c_p \Delta T$ 估算。取空气密度 1.2 kg/m³、$c_p \approx 1{,}005$ J/(kg·K)、温升 10 °C，1,000 W 只需要约 0.083 m³/s，并不是“飓风级”；风冷的真正极限在整柜几十千瓦时的风道总容量与热隔离，而不是单卡风量。
+| 层级 | 主要热阻来源 | 设计手段 |
+|------|-------------|---------|
+| die → 封装 | 硅、TIM、lid | 均热板、焊料 TIM、裸 die |
+| 封装 → 散热器 | 导热界面材料 | 冷板、热管、均热底板 |
+| 散热器 → 环境 | 对流/辐射/液冷回路 | 风道、DLC/CDU |
 
-DLC 的关键运维参数包括 CDU 的供/回液温度（单相约 18–32 °C / 35–50 °C）、流量、压差和泄漏检测；pPUE 通常在 1.02–1.20。液冷不是“更高级的风冷”，它改变的是机房级的散热架构。
+芯片侧的功耗密度（W/mm²）与热点分布决定热阻是否成为瓶颈。机柜风量、液冷方案、CDU 供回液温度与 PUE 属于机房基础设施层，见 [why-ai-cluster 散热篇](https://github.com/zyfengaa/why-ai-cluster/blob/main/02-芯片篇/07-功率越来越高散热怎么办.md)；先进封装的热设计与翘曲见 [13-工艺制造与先进封装](../../13-工艺制造与先进封装/notes/08-packaging-bottleneck.md)。
 
 ---
 
@@ -260,22 +263,14 @@ NVIDIA H100 (700W TDP)
     └── PCIe, 内存控制器, 各类接口
 ```
 
-### 5.2 数据中心 PUE
+### 5.2 从芯片功耗到集群电费（边界说明）
 
-```
-PUE (Power Usage Effectiveness) = 总能耗 / IT 设备能耗
+PUE、机柜液冷、CDU 与万卡集群年电费属于集群/机房层，不在本篇展开。相关计算与选型见：
 
-理想 PUE = 1.0 (全部能耗用于计算)
-典型数据中心 PUE = 1.2 - 1.6 (20-60% 额外用于冷却、配电等)
-Google 单个数据中心的最好水平约 1.04；其全球 fleet 平均近年约 1.09（不同年份和统计口径略有差异）
+- [为什么功率越来越高散热怎么办](https://github.com/zyfengaa/why-ai-cluster/blob/main/02-芯片篇/07-功率越来越高散热怎么办.md)
+- [液冷会成为标配吗](https://github.com/zyfengaa/why-ai-cluster/blob/main/09-前沿与实践篇/02-液冷会成为标配吗.md)
 
-以 H100 集群 (10,000 卡, 700W TDP):
-- 总计算功耗: 700W × 10000 = 7MW
-- 考虑 CPU / 网络 / 存储: ~10MW
-- PUE 1.2: 总功耗 = 12MW
-- 全年: 12MW × 8760h = 105,120 MWh
-- 电费: ~$0.08/kWh → $8.4M/年
-```
+本篇只保留芯片功耗方程、DVFS、Dark Silicon 与封装热阻这些"从晶体管到散热器接口"的内容。
 
 ---
 
@@ -288,5 +283,5 @@ Google 单个数据中心的最好水平约 1.04；其全球 fleet 平均近年�
 5. Borkar, S., & Chien, A. A. (2011). "The Future of Microprocessors." *Communications of the ACM*, 54(5).
 6. Le, H. P. (2012). "Designing Processors for Power Efficiency." *PhD Dissertation, Stanford University*.
 7. Shalf, J. (2020). "The Future of Computing Beyond Moore's Law." *Philosophical Transactions of the Royal Society A*, 378(2166).
-8. ASHRAE. *Water-Cooled Servers: Common Designs, Components, and Processes*. 2021. — 冷板液冷、CDU 供回液温度与运维参数.
-9. Open Compute Project. *Advanced Cooling Solutions (ACS) Project Documentation*. 2023. — 机柜级 DLC 密度与 pPUE 口径.
+8. Weste, N. H. E., & Harris, D. *CMOS VLSI Design: A Circuits and Systems Perspective* (4th ed.). Addison-Wesley, 2010. — 第 5 章 功耗与热设计；第 4 章 延迟模型.
+9. IRDS. *International Roadmap for Devices and Systems: More Moore*, 2023–2024. — 功耗密度与器件缩放路线图.

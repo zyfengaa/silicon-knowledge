@@ -1,303 +1,291 @@
-# 端到端案例分析：大模型训练的硬件系统分析与优化
+# 08 — 训练系统的硬件预算推导：从 6N FLOPs 到显存与 MFU
 
 ## 为什么讲这个
 
-前面的笔记分别介绍了 Roofline 模型、并行加速定律、功耗分析和 profiling 工具。现在，我们将这些知识整合起来，对一个真实的大规模系统进行端到端的分析。GPT-3 175B 的训练是近年来最受关注的大规模计算工程挑战之一，其训练涉及数千个 GPU、PB 级数据移动、复杂的并行策略和大量的工程优化。
+前面的笔记分别讲了 Roofline、Amdahl/Gustafson、功耗与散热、异构系统，以及 CPU/GPU/TPU 的 profiling 工具。到了真实的大模型训练，工程师最先要回答的不是“某个 kernel 快不快”，而是一组更靠前的预算问题：给定模型规模、token 数、序列长度和精度，需要多少算力、多少显存、多大网络、多少电，最后要花多少钱？
 
-通过这个案例分析，你将看到一个系统性能工程师如何综合运用多种分析工具和方法，从理论计算到实际实现，系统地识别瓶颈并制定优化方案。
+本篇把这些问题串成一条可复算的硬件预算链。GPT-3 175B 和 Llama 3 70B 是两个锚点：前者说明 6N FLOPs 和 MFU 的历史口径，后者给出一个可以逐项代入的现代 worked example。并行策略、ZeRO 分片、All-Reduce 算法和 NCCL 调优不在本篇展开，文末给出边界与延伸阅读。
 
-## 计算需求分析
+## 1. 算力预算：6N FLOPs 的推导
 
-### 总计算量
+### 1.1 前向 2N，反向 4N
 
-GPT-3 175B 模型（Brown et al., 2020）的训练：
+设模型参数量为 `N`，训练 token 数为 `D`。对一个参数矩阵 `W`（`N` 个元素）做一次前向矩阵乘，每个 token 需要 `N` 次乘加；按“一次乘加 = 2 FLOPs”的惯例，前向是 `2N` FLOPs/token。
 
-| 参数 | 值 |
-|------|-----|
-| 模型参数 | 1750 亿（175B） |
-| 层数 | 96 层 |
-| 隐藏维度 | 12,288 |
-| Attention Head 数 | 96 |
-| 训练 Token 数 | 3000 亿（300B） |
-| Batch Size | ~3.2M tokens |
-| 训练步数 | ~93,750 步（300B / 3.2M） |
-| 每 Token 计算量 | 2N Transformer FLOPs（前向）+ 4N Transformer FLOPs（反向）≈ 6N |
-| 总 FLOPs | 300B × 175B × 6 ≈ 3.15 × 10²³ FLOPs |
+反向要算两个梯度：对输入的梯度 `dX` 和对权重的梯度 `dW`。两者各需要一次与 `W` 同规模的矩阵乘，因此各 `2N` FLOPs/token，反向合计 `4N`。
 
-**计算推演的细节**：对于 Transformer 模型，每 Token 的计算量约为 6 × 参数量。这是因为 Transformer 层的前向传播中，矩阵乘法 $Y = XW$ 的计算量为 $2 \times \text{参数量}$ FLOPs（输出 $d_{out}$ 个元素，每个需要 $d_{in}$ 次乘加），而反向传播需要计算两个梯度（关于输入 $X$ 和权重 $W$），每个又需要 $2 \times \text{参数量}$ FLOPs，因此总计算量为 $6 \times \text{参数量}$。
-
-因此，GPT-3 175B 在 300B Token 上的总计算量：
-$$
-\text{Total FLOPs} = 300 \times 10^9 \times 175 \times 10^9 \times 6 = 3.15 \times 10^{23}
-$$
-
-### 硬件配置
-
-GPT-3 的论文明确说明，它是在 Microsoft Azure 上使用 **约 10,000 张 NVIDIA V100** 训练的，而不是 NDv4/A100 集群。V100 的关键规格如下：
-
-| 硬件 | 规格 |
-|------|------|
-| GPU | 约 10,000 个 NVIDIA V100（Azure） |
-| 单卡算力 | 125 TFLOPS（FP16 Tensor Core） |
-| 单卡显存 | 32 GB HBM2 |
-| 单卡显存带宽 | 约 900 GB/s |
-| GPU 间互联 | NVLink 2.0（300 GB/s 双向/GPU） |
-| 每节点 GPU 数 | 8（典型配置） |
-| 节点间互联 | Microsoft Azure 集群网络（具体配置未公开） |
-
-> 说明：GPT-3 论文没有公开完整的节点级网络拓扑。原文若写成“10,000 个 A100、NDv4、NVLink 3.0、InfiniBand HDR”是不准确的。
-
-### 理论最短训练时间
-
-先按 **V100 的实际峰值** 计算：
-
-$$
-\text{Time}_{\text{min}} = \frac{3.15 \times 10^{23} \text{ FLOPs}}{10,000 \times 125 \times 10^{12} \text{ FLOPs/s}} \approx 2.52 \times 10^{5} \text{s} \approx 70 \text{ 小时}
-$$
-
-如果按 GPT-3 公开的约 **21.3% MFU** 估算，实际训练时间约为：
-
-$$
-\frac{70 \text{ h}}{0.213} \approx 329 \text{ h} \approx 13.7 \text{ 天}
-$$
-
-为便于与后文 A100 的算力口径对照，若假设使用 10,000 张 A100（312 TFLOPS BF16/FP16）：
-
-$$
-\text{Time}_{\text{min}} = \frac{3.15 \times 10^{23}}{10,000 \times 312 \times 10^{12}} \approx 1.01 \times 10^{5} \text{s} \approx 28 \text{ 小时}
-$$
-
-以 50% MFU 计算约为 **56 小时（约 2.34 天）**。这两个数字是“A100 口径”的对照，不是 GPT-3 实际使用的 V100 集群。
-
-> 关键点：理论下界只取决于总 FLOPs 和峰值算力；实际时间还要除以 MFU。GPT-3 的 MFU 约为 21.3%，因此不能用 50% 甚至 100% 直接估算其真实训练时间。
-
-## 内存需求分析
-
-### 模型状态
-
-大模型训练需要存储三类状态：
-
-> **口径说明**：下表采用 **12 B/参数**（BF16 权重 2 + BF16 梯度 2 + FP32 Adam m/v 各 4，不含 FP32 master 权重）。这是可用口径之一，但不是唯一：
-> - **16 B/参数**：标准混合精度，额外包含 FP32 master 权重（4 B）。70B 模型约 1.12 TB，175B 约 2.8 TB；
-> - **8 B/参数**：权重、梯度、动量全部用 BF16，常见于部分 TPU/ZeRO 配置的乐观估算。70B 约 560 GB。
->
-> 引用显存数字时必须说明采用哪一种口径，否则会得到相差 2 倍的结论。
-
-| 状态 | 数据类型 | 每参数大小 | 175B 的总大小 |
-|------|---------|-----------|-------------|
-| 权重（Weights） | BF16 | 2 bytes | 350 GB |
-| 优化器状态 1（Momentum） | FP32 | 4 bytes | 700 GB |
-| 优化器状态 2（Variance） | FP32 | 4 bytes | 700 GB |
-| 梯度（Gradients） | BF16 | 2 bytes | 350 GB |
-| **总计** | | | **2,100 GB** |
-
-以上总计约 **2.1 TB**。而单卡 V100 只有 32 GB 显存（A100 为 80 GB），因此**无法在任何一张卡上完整存放全部模型状态**。这迫使我们必须使用分布式训练策略。
-
-### 激活值（Activations）
-
-激活值是前向传播中存储的中间结果，用于反向传播时的梯度计算。激活值的大小取决于层数、序列长度、batch size、隐藏维度和并行切分方式；在 GPT-3 这类模型中，每张卡的激活值可能达到数十 GB 量级。具体数值应结合模型配置和 activation checkpointing 策略估算，不宜给出一个固定的“40–60 GB”数字。
-
-### 推理显存与 KV cache
-
-推理的显存账本与训练不同：不需要梯度、优化器状态和大部分激活值，但需要为每个并发序列保存 KV cache。
-
-- **权重**：参数量 × 每参数字节。70B BF16 约 140 GB。
-- **KV cache**：`2 × layers × kv_heads × head_dim × seq_len × batch × bytes_per_elem`。因子 2 对应 K 和 V；使用 GQA/MQA 时 `kv_heads` 远小于注意力头数，这是长上下文能落地的关键。
-
-以 Llama 3 70B 为例（80 层、8 个 KV head、head_dim 128、FP16）：
-
-$$
-2 \times 80 \times 8 \times 128 \times 2 = 327{,}680 \text{ B} \approx 320 \text{ KiB/token}
-$$
-
-128K 上下文、batch=8 时约 **320 GiB**，已经超过权重本身。实际部署还要为碎片、框架开销和临时 buffer 留余量。因此推理集群的显存规划通常是“权重 + KV cache × 并发数”，并通过 PagedAttention、KV 量化、HBM→DRAM→SSD 分层来降低单序列占用。
-
-## ZeRO 优化器：显存优化的关键
-
-ZeRO（Zero Redundancy Optimizer，Rajbhandari et al., 2020）由 Microsoft 提出，通过分片（shard）优化器状态、梯度和参数来消除数据并行中的内存冗余。
-
-### ZeRO 的三个阶段
-
-```
-ZeRO-1（优化器状态分片）：
-每个 GPU 持有全部参数和梯度，优化器状态按 GPU 分片
-→ 减少优化器状态冗余：从 N×O 降低到 (O + N×P + N×G)
-  （O=优化器状态, P=参数, G=梯度）
-
-ZeRO-2（梯度分片）：
-每个 GPU 持有全部参数，梯度和优化器状态按 GPU 分片
-→ 在前向传播中，GPU 广播自己的参数分片
-→ 在反向传播中，梯度按 GPU 分片 All-Reduce
-
-ZeRO-3（参数分片）：
-每个 GPU 只持有部分参数、部分梯度和部分优化器状态
-→ 计算前动态 gather 参数
-→ 计算完立即释放不需要的参数分片
+```text
+前向:    C_fwd = 2 · N · D
+反向:    C_bwd = 4 · N · D
+训练合计: C_train = 6 · N · D
 ```
 
-### 显存节省量化
+这就是 **6N 规则**。它统计的是“参数矩阵乘”的模型 FLOPs，不含注意力分数、归一化、softmax、逐元素操作和通信。
 
-以 N = 64 个 GPU、按本文口径（权重 350 GB + 梯度 350 GB + Momentum 700 GB + Variance 700 GB = 2,100 GB）为例：
+### 1.2 6N 的适用边界
 
-| 阶段 | 每卡显存占用 | 相对 baseline |
-|------|-------------|-------------|
-| Baseline（无 ZeRO） | 2,100 GB | 100% |
-| ZeRO-1 | 350 + 350 + 1,400/64 ≈ 721.9 GB | 34.4% |
-| ZeRO-2 | 350 + 350/64 + 1,400/64 ≈ 377.3 GB | 18.0% |
-| ZeRO-3 | 2,100/64 ≈ 32.8 GB | 1.56% |
+6N 很好用，但它有明确的适用条件。下面任何一条不成立，都要修正：
 
-对于 175B 模型使用 10,000 个 GPU，ZeRO-3 的每卡模型状态约为：
+- **只统计参数矩阵乘**：embedding 查表、LayerNorm、softmax、残差相加、激活函数都不计入。对标准 Transformer，这些项通常占比不大，但不是零。
+- **不含注意力的 `s²` 项**：注意力核心是 `QK^T` 和 `PV`，每个 token 的计算量随序列长度 `s` 增长。它与 6N 项的比值近似为：
 
-$$
-\frac{2{,}100}{10{,}000} = 0.21 \text{ GB}
-$$
+```text
+C_attn / C_6N ≈ (2/3) · L · s · h / N
+```
 
-注意：这里只计算了模型状态，不含激活值。加上激活值后，32 GB 的 V100 仍然需要模型并行、activation checkpointing 或 offloading 才能放下。
+  以 Llama 3 70B 为例（`L=80`、`h=8192`、`N=70e9`），`s=8K` 时约为 5%，`s=128K` 时约为 82%。**长上下文训练不能只用 6N 做预算。**
+- **不含重计算**：全量 activation recomputation 会多跑一遍前向，硬件 FLOPs 变成 `8N`；选择性重计算介于 `6N` 和 `8N` 之间。
+- **MoE 要分开算**：计算 FLOPs 用“每 token 激活的参数量”，显存账本用“总参数量”。用总参数量乘 6N 会把计算量高估数倍。
+- **多 epoch 要乘轮数**：`D` 是实际参与训练的 token 次数；推理前向则是约 `2N` FLOPs/token，另加 KV cache 访存。
 
-## 并行策略：数据并行 + 模型并行
+### 1.3 GPT-3 175B：理论下限与 21.3% 的口径
 
-### 数据并行（Data Parallelism）
+GPT-3 175B 使用 300B token 训练，按 6N 计算：
 
-最简单的并行方式：每个 GPU 持有完整的模型副本，对不同的数据子集进行计算。
+```text
+C = 6 × 175e9 × 300e9 = 3.15e23 FLOPs
+```
 
-- **优势**：实现简单，负载均衡好
-- **劣势**：每步结束时需要进行 All-Reduce 同步梯度，产生通信开销
-- **通信量**：每步通信 2 × 模型大小（BF16 梯度）
+| 项目 | 数值 | 口径 |
+|------|------|------|
+| 参数量 `N` | 175B | 稠密模型 |
+| 训练 token `D` | 300B | 预训练 token 总量 |
+| 总模型 FLOPs | `3.15e23` | 6N，不含重计算和注意力额外项 |
+| 训练硬件 | 约 10,000 张 V100 | Microsoft Azure，非 A100 |
+| 单卡峰值 | 125 TFLOPS | FP16 Tensor Core，稠密 |
+| 理论最短时间 | 约 70 h | `3.15e23 / (1e4 × 125e12)` |
 
-### 张量/模型并行（Tensor/Model Parallelism）
+```text
+T_peak = 3.15e23 / (10,000 × 125e12)
+       = 2.52e5 s
+       ≈ 70 h
 
-将单个 Transformer 层的矩阵乘法切分到多个 GPU 上（Megatron-LM 方式）。以 MLP 层为例，其包含两个矩阵乘法 $Y = \text{GELU}(XW_1)W_2$：
+T_actual(21.3%) = 70 h / 0.213
+                ≈ 329 h
+                ≈ 13.7 d
+```
 
-- 第一个 GEMM（$XW_1$）按**列**切分 $W_1$：每个 GPU 计算一部分输出列，**不需要 All-Reduce**；
-- 第二个 GEMM（$Y W_2$）按**行**切分 $W_2$：每个 GPU 计算部分和，最后需要一次 **All-Reduce** 汇总。
+**21.3% 的口径**：这是常见的工程反推值，不是 GPT-3 论文正式报告的 MFU。它的分子是 6N 模型 FLOPs（`3.15e23`），分母是 10,000 × V100 稠密 FP16 峰值（`1.25e18 FLOP/s`），并对应约 329 h（13.7 天）的墙钟时间假设。GPT-3 论文没有以 MFU 形式报告效率，也未给出可直接复算的完整墙钟时间和峰值口径，因此引用时应把“6N + V100 125 TFLOPS + 约 13.7 天”一起写出，不要把它和 PaLM 的 46.2% 当作同一实验口径直接横比。
 
-- **优势**：减少每个 GPU 的矩阵维度，减少激活值显存
-- **劣势**：层内通信密集，需要高带宽的片间互联（如 NVLink）
-- **建议范围**：单个节点内（8 GPU）
+## 2. 显存预算：模型状态、激活值与 KV cache
 
-### 流水线并行（Pipeline Parallelism）
+### 2.1 模型状态：12 / 16 / 8 B/参数
 
-将 Transformer 的不同层放置在不同 GPU 上，例如 96 层分配到 16 个 GPU 上，每个 GPU 负责 6 层。流水线并行的重要优化技术是 **1F1B（One-Forward-One-Backward）调度**，它通过在反向传播计算之前尽早开始计算，减少“流水线气泡”。
+训练时的模型状态由权重、梯度、FP32 master 权重和 Adam 一阶/二阶动量组成。不同框架和论文采用不同口径，常见的是下面三种：
 
-- **优势**：通信量小（仅每层边界传输激活值）
-- **劣势**：存在流水线气泡（pipeline bubble），GPU 利用率降低
-- **建议范围**：跨节点
+| 口径 | 权重 | 梯度 | FP32 master | Adam m | Adam v | 合计 | 70B 总量 | 175B 总量 |
+|------|------|------|-------------|--------|--------|------|----------|-----------|
+| 16 B/参数 | 2 | 2 | 4 | 4 | 4 | 16 | 1.12 TB | 2.8 TB |
+| 12 B/参数 | 2 | 2 | — | 4 | 4 | 12 | 840 GB | 2.1 TB |
+| 8 B/参数 | 2 | 2 | — | 2 | 2 | 8 | 560 GB | 1.4 TB |
 
-> 注意：**GPT-3 没有使用流水线并行**。GPT-3 论文采用的是“节点内 8 路模型并行 + 跨节点数据并行”的组合。流水线并行（以及后来常说的 3D 并行）是 Megatron-LM 等工作在 GPT-3 之后系统化的技术，不能倒推成 GPT-3 的训练配置。
+三种口径的由来：**16 B/参数**是标准混合精度训练，BF16 权重和梯度，另存 FP32 master 权重，Adam 的 `m`、`v` 保持 FP32，Megatron、PyTorch AMP 等常见配置对应此口径；**12 B/参数**去掉 FP32 master 权重，权重和梯度 BF16，Adam 状态仍为 FP32，部分 ZeRO/DeepSpeed 配置用它做估算，省 4 B/参数但更新精度要单独评估；**8 B/参数**把权重、梯度、一阶/二阶动量全部用 BF16（或 8-bit optimizer），是“能不能放下”的乐观口径，不应默认当作生产训练的实际占用。另外还有 14 B/参数（权重 2 + FP32 master 4 + Adam 8，不含梯度），只适合“权重 + 优化器”的局部估算，不要和完整训练状态混用。
 
-### GPT-3 的实际并行组合
+模型状态的总量与并行切分方式无关，但每卡占用取决于切分：
 
-| 并行维度 | GPT-3 的做法 | 说明 |
-|---------|-------------|------|
-| 数据并行 | 跨节点复制模型、切分 batch | 梯度 All-Reduce |
-| 模型/张量并行 | 节点内 8 路 | 单层矩阵切分到 8 个 GPU |
-| 流水线并行 | **未使用** | 后续 Megatron-LM 等工作采用 |
+```text
+M_state = N · b_state
+M_state_per_gpu ≈ N · b_state / (TP · PP)      # DP 复制，不减小模型状态
+```
 
-按每节点 8 GPU 估算，10,000 张卡大致形成约 1,250 个数据并行组；论文没有给出“64 × 8 × 16 = 8,192”这样的 3D 组合。
+这里 `TP`、`PP` 是张量并行和流水线并行度。若使用 ZeRO/FSDP 对优化器状态或参数做分片，分母会变化；这部分属于并行策略，见文末链接。**引用显存数字时，必须同时说明“B/参数口径”和“每卡切分方式”**，否则 70B 既可能被算成 1.12 TB，也可能被算成 560 GB。
 
-### MFU（Model FLOPS Utilization）
+### 2.2 激活值
 
-MFU 是衡量大规模训练系统效率的综合指标：
+激活值是前向过程中为反向保存的中间结果。它没有一条放之四海而皆准的公式，但可以用下面的量级模型做预算：
 
-$$
-\text{MFU} = \frac{\text{实际达到的 FLOPs}}{\text{理论峰值 FLOPs}}
-$$
+```text
+A_total ≈ L · s · b_micro · h · c_act
+A_per_gpu ≈ A_total / (TP · PP · CP)
+```
 
-| 模型 | 系统 | MFU | 关键限制因素 |
-|------|------|-----|-------------|
-| GPT-3 175B | ~10,000 V100 | ~21.3% | 通信、模型并行、负载不均 |
-| PaLM 540B | 6,144 TPU v4 | 46.2% MFU（57.8% HFU） | XLA 编译效率、数据加载、重计算 |
-| MT-NLG 530B | 2,240 A100 | ~30.2% | 通信、流水线气泡 |
+其中 `L` 是层数，`s` 是序列长度，`b_micro` 是每张卡（每个 DP 副本）的 micro-batch，`h` 是隐藏维度，`c_act` 是每层、每 token、每隐藏维度的等效字节数：
 
-> MFU 与 HFU 不同：HFU 把 activation recomputation 等额外硬件 FLOPs 也算进去，因此通常高于 MFU。PaLM 论文同时报告了 46.2% MFU 和 57.8% HFU，不能把 57.8% 当作 MFU。
+- 不做重计算：`c_act ≈ 30–40 B`；
+- 选择性或全量重计算：`c_act ≈ 10–20 B`。
 
-## 通信分析
+这些系数是工程估算，实际值取决于注意力 kernel、sequence parallel、是否使用 FlashAttention 以及框架的 buffer 复用。若显式物化注意力分数，还要额外计算：
 
-### All-Reduce 通信量
+```text
+A_scores ≈ L · b_micro · n_heads · s² · bytes
+```
 
-在数据并行中，梯度 All-Reduce 的通信量：
+这一项随 `s²` 增长，是长上下文训练显存爆炸的主因之一；FlashAttention 通过分块避免把完整的 `s × s` 矩阵写回 HBM，改变的是显存和访存，不是数学结果。
 
-$$
-\text{每步通信量} \approx 2 \times \text{模型参数量} \times \text{梯度字节数}
-$$
+### 2.3 KV cache
 
-对于 175B 模型使用 BF16（2 字节）梯度：
+推理的显存账本与训练不同：不需要梯度、优化器状态和大部分激活值，但每个并发序列都要保存 KV cache。
 
-$$
-\text{每步 All-Reduce 通信量} \approx 2 \times 175 \times 10^9 \times 2 = 700 \text{ GB}
-$$
+```text
+KV_per_token = 2 · L · n_kv_heads · d_head · bytes_per_elem
+```
 
-如果训练 93,750 步：
+因子 2 对应 K 和 V。使用 GQA/MQA 时，`n_kv_heads` 远小于注意力头数，这是长上下文能够落地的关键。
 
-$$
-\text{总通信量} \approx 700 \text{ GB} \times 93{,}750 \approx 65.6 \text{ PB}
-$$
+以 Llama 3 70B 为例（80 层、8 个 KV head、`head_dim=128`、FP16）：
 
-这意味着在整个训练过程中，仅 All-Reduce 一项就传输了约 65.6 PB 的数据（这是按每 GPU 每步 700 GB 的简化估算；实际总网络流量还取决于 All-Reduce 算法和拓扑）。
+```text
+KV_per_token = 2 × 80 × 8 × 128 × 2
+             = 327,680 B
+             ≈ 320 KiB/token
 
-### 通信优化技术
+128K 上下文、batch = 8:
+327,680 × 131,072 × 8 = 343.6 GB ≈ 320 GiB
+```
 
-1. **梯度压缩（Gradient Compression）**：使用 TopK 稀疏化或 1-bit 量化减少通信量
-2. **梯度累积（Gradient Accumulation）**：在本地累积多个 micro-batch 的梯度后再进行 All-Reduce，减少通信频率
-3. **重叠通信和计算（Overlap Communication with Computation）**：在反向传播的同时异步进行梯度 All-Reduce
-4. **Ring All-Reduce vs. Tree All-Reduce**：Ring 算法每个 rank 约传输 $2(N-1)/N \times \text{模型大小}$，带宽利用率高，适合大规模集群；Tree 算法在延迟和拥塞方面有不同取舍
+单条 128K 序列的 KV cache 约 42.95 GB（40 GiB），已经接近 70B BF16 权重（140 GB）的三分之一；batch = 8 时约 343.6 GB，超过权重本身。训练时通常不跨步保存 KV cache，但长上下文训练的激活值和注意力工作集会体现类似的增长，预算时不能只算权重。
 
-## 实际训练中的瓶颈分析
+## 3. 效率预算：MFU 与 HFU
 
-### 瓶颈分解
+**MFU（Model FLOPs Utilization）** 衡量“模型真正需要的 FLOPs”占硬件峰值的比例；**HFU（Hardware FLOPs Utilization）** 衡量“硬件实际执行的 FLOPs”占峰值的比例。
 
-GPT-3 训练中的主要开销包括：
+```text
+MFU = model_FLOPs_per_s / (G · P_dense)
+HFU = hardware_FLOPs_per_s / (G · P_dense)
+HFU / MFU = hardware_FLOPs / model_FLOPs
+```
 
-- **数据并行 All-Reduce**：梯度同步是跨节点通信的主要来源；
-- **模型并行通信**：节点内 8 路切分会引入层内 All-Reduce/All-Gather；
-- **优化器更新**：Adam 需要更新动量、方差和 FP32 主权重；
-- **数据加载与预处理**：如果输入管线跟不上，GPU 会空闲；
-- **activation recomputation**：用额外计算换显存，会降低 MFU。
+- 分母必须是**稠密峰值**，且精度要与分子一致。H100 的 BF16 稠密峰值是 989 TFLOPS，稀疏峰值是 1,979 TFLOPS；用 1,979 做分母会把 MFU 系统性低估一半。
+- 分子是模型 FLOPs 时得到 MFU；分子包含重计算、padding、注意力额外项等硬件 FLOPs 时得到 HFU。
+- 因此 `HFU ≥ MFU`。全量重计算时硬件 FLOPs 是模型 FLOPs 的 `8/6 = 1.333` 倍，对应 `MFU = 0.75 × HFU`；选择性重计算的比例介于两者之间。
+- PaLM 论文同时报告 46.2% MFU 和 57.8% HFU。两者比值 `57.8 / 46.2 ≈ 1.25`，说明硬件实际执行的 FLOPs 比模型 FLOPs 多约 25%，与选择性重计算和注意力开销的量级一致。**不能把 57.8% 当作 MFU 引用。**
 
-具体的时间占比随实现、网络和 batch size 变化很大。原文给出的“3.5 秒/步、All-Reduce 34%、流水线气泡 9%”等数字没有公开来源，不应作为 GPT-3 的实测数据；这里只保留定性分析。
+| 模型/系统 | MFU | HFU | 口径说明 |
+|-----------|-----|-----|---------|
+| GPT-3 175B / 约 10,000 V100 | 约 21.3% | — | 6N + V100 稠密峰值 + 约 13.7 天假设的反推值 |
+| PaLM 540B / 6,144 TPU v4 | 46.2% | 57.8% | 论文报告；HFU 含重计算等硬件 FLOPs |
+| Llama 3 405B / 16,384 H100 | 38–43% | — | 论文公开范围 |
 
-### Scaling Efficiency
+MFU 只有在同模型规模、同硬件、同精度、同 batch 策略下横比才有意义。小模型的 MFU 天然偏低，因为 kernel launch 和数据搬运占比更高。
 
-大规模训练的缩放效率（Scaling Efficiency）定义为：
+## 4. 硬件预算推导流程
 
-$$
-\text{Scaling Efficiency} = \frac{S(N)}{N} = \frac{\text{实际加速比}}{\text{GPU 数量}}
-$$
+把前面的公式串起来，得到一条从 workload 到成本的预算链：
 
-随着 GPU 数量增加，通信、同步和负载不均会使效率下降。下降的速度取决于网络带宽/延迟、并行策略、batch size 和模型结构；不同系统之间差异很大，不能用一个固定的“1,024→79%、8,192→52%”表格概括。若需要定量曲线，应基于具体集群的实测数据。
+```text
+workload: N, D, s, b, precision, epochs
+  → FLOPs:        C = 6ND（全量重计算按 8ND 做硬件预算）
+  → peak time:    T_peak = C / (G · P_dense)
+  → MFU:          target 或 measured
+  → actual time:  T_actual = T_peak / MFU
+  → memory:       M_state/(TP·PP) + A_activations + KV + workspace
+  → interconnect: B_req ≈ 2 · S_grad/(TP·PP) / T_step
+  → power/energy: P_IT = G · TDP；P_facility = P_IT · PUE；E = P_facility · T
+  → cost:         G · T · $/GPU-h + E · $/kWh + network/storage
+```
 
-### 未来挑战
+| 步骤 | 关键输入 | 公式 | 输出 | 典型失败信号 |
+|------|---------|------|------|-------------|
+| 1. Workload | `N`、`D`、`s`、`b`、精度 | 无 | 计算/显存的基本规模 | 把总参数当激活参数、忘记 epoch |
+| 2. FLOPs | 参数量、token 数 | `6ND` 或 `8ND` | 模型/硬件 FLOPs | 长上下文仍只用 6N |
+| 3. Peak time | FLOPs、卡数、峰值 | `C / (G · P_dense)` | 理论下限 | 用稀疏峰值或混用精度 |
+| 4. MFU | 实测或目标效率 | `T_actual = T_peak / MFU` | 实际时间 | 把 HFU 当 MFU |
+| 5. Memory | 状态、激活、KV、workspace | 分项求和 | 每卡显存占用 | 只算权重、不算激活 |
+| 6. Interconnect | 梯度大小、并行度、步时间 | `2S/(TP·PP)/T_step` | 每卡带宽需求 | 把双向带宽当单向 |
+| 7. Power/energy | TDP、PUE、时间 | `P_IT · PUE · T` | MWh/GWh | 只算 GPU、不算机房 |
+| 8. Cost | GPU-hours、电价、租用价 | 分项求和 | 总成本、$/token | 漏掉网络、存储、运维 |
 
-1. **通信墙**：随着模型参数量和 GPU 数量的增长，All-Reduce 通信量呈增长趋势，而网络带宽的增长缓慢。未来的方向包括更激进的通信压缩和异步并行。
+### 4.1 Worked example：Llama 3 70B / 15T tokens
 
-2. **显存墙**：模型参数量和序列长度持续增长，而单卡显存受限于 HBM 封装技术。需要更高效的显存复用和更智能的 offloading 策略。
+**假设**（示例配置，不是 Llama 3 70B 的实际训练集群）：
 
-3. **可靠性墙**：在数千到数万个 GPU 上运行数周到数月，硬件故障是必然事件。需要高效的 checkpoint/restart 机制和故障容错训练策略。
+```text
+N = 70e9, D = 15e12, L = 80, h = 8192, s = 8192
+precision = BF16, micro-batch b = 4
+G = 8,192 × H100 SXM（989 TFLOPS dense, 80 GB, 3.35 TB/s, 700 W）
+TP = 8, PP = 8, DP = 128（8 × 8 × 128 = 8,192）
+target MFU = 40%（Llama 3 405B 公开值 38–43% 的锚点）
+PUE = 1.25, $2/GPU-h, $0.08/kWh
+```
 
-4. **能耗墙**：GPT-3 的训练估计消耗约 1,300 MWh，碳排放约 500 吨 CO₂。更高效的硬件和训练算法（如稀疏训练、量化训练）是可持续发展的关键。
+**第一步：算力与时间。**
+
+```text
+C_model = 6 × 70e9 × 15e12 = 6.3e24 FLOPs
+C_hw    = 8 × 70e9 × 15e12 = 8.4e24 FLOPs      # 全量重计算口径
+
+P_peak = 8,192 × 989e12 = 8.101e18 FLOP/s
+T_peak = 6.3e24 / 8.101e18 = 7.78e5 s = 216 h = 9.0 d
+T_40%  = 216 / 0.40 = 540 h = 22.5 d
+```
+
+**第二步：显存账本。** 16 B/参数下模型状态总量 `70e9 × 16 = 1.12 TB`；在 `TP×PP = 64` 路切分后，每卡约 17.5 GB。
+
+| 项目 | 计算 | 每 GPU 结果 |
+|------|------|------------|
+| 模型状态（16 B） | `70e9 × 16 / 64` | 17.5 GB |
+| 模型状态（12 B） | `70e9 × 12 / 64` | 13.1 GB |
+| 模型状态（8 B） | `70e9 × 8 / 64` | 8.75 GB |
+| 激活值（`c_act=34`） | `80 × 8192 × 4 × 8192 × 34 / 64` | 11.4 GB |
+| 激活值（`c_act=20`，重计算） | 同式，`c_act=20` | 6.7 GB |
+| workspace/通信缓冲 | 工程预留 | 5 GB |
+| 合计（16 B，不重计算） | `17.5 + 11.4 + 5` | 33.9 GB |
+| 合计（16 B，重计算） | `17.5 + 6.7 + 5` | 29.2 GB |
+
+80 GB 的 H100 在这个配置下还剩约 46–51 GB 余量，显存不是主要瓶颈。若把 `TP×PP` 降到 32，模型状态翻倍到 35 GB，合计约 51–57 GB，仍然放得下但余量明显变小；若改用 12 B/8 B 口径，每卡分别再省约 4.4 GB/8.75 GB。注意这是“能放下”的账，不等于“跑得快”。
+
+**第三步：互连带宽需求。** 设每步 token 数为 `DP × b × s`：
+
+```text
+D_step = 128 × 4 × 8192 = 4.194e6 tokens
+C_step = 6 × 70e9 × 4.194e6 = 1.76e18 FLOPs
+T_step = 1.76e18 / (8.101e18 × 0.40) = 0.543 s
+
+S_grad  = 2 B × 70e9 = 140 GB
+S_slice = 140 / (8 × 8) = 2.19 GB
+V_AR    ≈ 2 × 2.19 × 127/128 = 4.34 GB/GPU/step
+B_req   = 4.34 / 0.543 = 8.0 GB/s/GPU
+```
+
+每卡 IB NDR 单向约 50 GB/s，DP 梯度 All-Reduce 的净需求约 8 GB/s，占单端口约 16%，看起来余量充足。但实际还要叠加 PP 的激活传输、TP 的节点内通信、checkpoint 写盘和拥塞/慢节点，因此工程上通常按 2–3 倍余量规划，并做通信/计算重叠。
+
+**第四步：功率、能量与成本。**
+
+```text
+P_IT   = 8,192 × 700 W = 5.73 MW
+P_fac  = 5.73 × 1.25 = 7.17 MW
+E      = 7.17 MW × 540 h = 3.87 GWh
+E/token = 3.87e6 kWh × 3.6e6 J/kWh / 15e12 = 0.93 J/token
+
+GPU-hours = 8,192 × 540 = 4.42e6
+租金       = 4.42e6 × $2 = $8.85M
+电费       = 3.87e6 kWh × $0.08 = $0.31M
+$/token    ≈ $8.85M / 15e12 = $0.59 / 1M tokens
+```
+
+以上成本只含 GPU 租用和电费，不含网络、存储、运维和失败重跑；`$/GPU-h` 与电价都是示例假设，不构成采购或报价依据。
+
+**第五步：敏感性。** MFU 从 40% 降到 35%，时间从 540 h 增到 617 h（25.7 天），租金从 $8.85M 增到 $10.1M；升到 45% 则降到 480 h（20.0 天）和 $7.86M。在这个配置下，结论是：**算力和时间是主约束，显存有余量，DP 梯度 All-Reduce 不是网络瓶颈**。如果序列长度从 8K 增到 32K，激活值和注意力的 `s²` 项会重新改写显存与算力账本；如果 MFU 从 40% 掉到 30%，时间与租金约增加 33%。
+
+## 5. 口径卡
+
+| 口径 | 正确定义 | 常见误用 |
+|------|---------|---------|
+| 6N vs 8N | 6N 是模型 FLOPs（前向 2N + 反向 4N）；8N 是全量重计算后的硬件 FLOPs | 用 8N 算 MFU 分子，或把 6N 当作硬件实际执行量 |
+| 12 / 16 / 8 B | 每参数训练状态字节数：12 B 无 FP32 master，16 B 含 master，8 B 全 BF16/8-bit | 不说明口径就报“70B 要 560 GB/1.12 TB”；把模型状态和激活混在一起 |
+| dense / sparse | 稠密峰值与 2:4 稀疏峰值通常差 2 倍 | MFU 分母用稀疏峰值；跨精度比较峰值 |
+| MFU / HFU | MFU 用模型 FLOPs，HFU 用硬件 FLOPs；HFU ≥ MFU | 把 PaLM 的 57.8% HFU 写成 MFU；忽略重计算 |
+| GB / GiB | GB = 10⁹ 字节，GiB = 2³⁰ 字节 | 把 343.6 GB 写成 343.6 GiB；厂商标称容量混用 |
+
+## 6. 边界：哪些问题不在这篇展开
+
+本篇只回答“需要多少算力、显存、带宽、电和钱”，是可行性与预算分析。它不回答“模型怎么切、通信怎么调、故障怎么恢复”。以下问题属于系统层，建议按顺序阅读 why-ai-cluster 的对应章节：
+
+- 数据并行、张量并行、流水线并行的原理、通信量与组合方式：[数据并行 DP](https://github.com/zyfengaa/why-ai-cluster/blob/main/05-并行策略篇/01-数据并行DP.md)
+- 给定模型和卡数后，TP/PP/DP 如何选型：[并行策略选型决策树](https://github.com/zyfengaa/why-ai-cluster/blob/main/05-并行策略篇/07-并行策略选型决策树.md)
+- 通信为什么慢、NCCL 调优到底在调什么：[NCCL 调优到底在调什么](https://github.com/zyfengaa/why-ai-cluster/blob/main/08-运维观测篇/03-NCCL调优到底在调什么.md)
 
 ## 总结
 
-大模型训练系统的性能分析是系统工程能力的终极考验。通过 GPT-3 175B 的案例分析，我们可以看到：
-
-1. **理论天花板**：从 FLOPs 计算出发，明确训练时间的下界；实际时间还要除以 MFU
-2. **内存瓶颈**：显存限制决定了必须使用 ZeRO、模型并行、checkpointing 等显存优化技术
-3. **并行策略**：GPT-3 使用数据并行 + 节点内 8 路模型并行；流水线并行和 3D 并行是后续技术
-4. **通信分析**：All-Reduce 是大规模训练的主要瓶颈之一，通信占比随规模增长
-5. **实际效率**：GPT-3 的 MFU 约 21.3%，PaLM 约 46.2%，说明大规模系统的效率仍有很大提升空间
-
-综合使用本模块学到的 Roofline 模型（分析单点瓶颈）、Amdahl/Gustafson 定律（分析并行效率）和 profiling 工具（实测定位），就能对大模型训练系统做出系统性的分析。
+训练系统的硬件预算可以压缩成一条链：`6ND → 峰值时间 → MFU → 实际时间 → 显存账本 → 带宽需求 → 能量与成本`。6N 是模型 FLOPs 的近似，长上下文、重计算和 MoE 都会让它偏离；12/16/8 B 是三种不同的训练状态口径，70B 分别对应 840 GB/1.12 TB/560 GB；MFU 和 HFU 的分子不同，PaLM 的 57.8% 不能当 MFU 用。把口径写在数字旁边，比把数字算到小数点后两位更重要。
 
 ## 参考文献
 
-1. Brown, T. B., et al. "Language Models are Few-Shot Learners." *Advances in Neural Information Processing Systems (NeurIPS)*, 2020. — GPT-3 模型的原始论文，包含训练配置和计算量数据
-2. Rajbhandari, S., et al. "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models." *Proceedings of the International Conference for High Performance Computing (SC)*, 2020. — ZeRO 优化器的原始论文，详细分析了显存优化策略
-3. Shoeybi, M., et al. "Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism." *arXiv:1909.08053*, 2019. — 张量并行的原始论文，介绍了 Transformer 层的切分策略
-4. Narayanan, D., et al. "Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM." *Proceedings of the International Conference for High Performance Computing (SC)*, 2021. — 3D 并行（数据+张量+流水线）的论文，包含 MFU 和 scaling efficiency 数据
-5. Chowdhery, A., et al. "PaLM: Scaling Language Modeling with Pathways." *Journal of Machine Learning Research*, 2022. — PaLM 模型的论文，包含 TPU v4 上的训练效率和 MFU/HFU 数据
-6. Touvron, H., et al. "LLaMA: Open and Efficient Foundation Language Models." *arXiv:2302.13971*, 2023. — LLaMA 模型的论文，包含在 A100 上的训练优化
-7. Smith, S., et al. "Using DeepSpeed and Megatron to Train Megatron-Turing NLG 530B, A Large-Scale Generative Language Model." *arXiv:2201.11990*, 2022. — 530B 参数模型的训练经验，包含 3D 并行在大规模下的实际效率分析
-8. Jouppi, N. P., et al. "TPU v4: An Optically Reconfigurable Supercomputer for Machine Learning with Hardware Support for Embeddings." *ISCA 2023*, arXiv:2304.01433. — TPU v4 的正式架构论文
-9. Patterson, D., et al. "Carbon Emissions and Large Neural Network Training." *arXiv:2104.10350*, 2021. — 分析了 GPT-3 训练的碳排放和能耗数据
-10. Kwon, W., et al. "Efficient Memory Management for Large Language Model Serving with PagedAttention." *SOSP 2023*. — KV cache 的分页管理与推理显存估算
-11. Meta AI. "Llama 3 Model Card." 2024. — Llama 3 70B 的层数、KV head 数与上下文长度
+1. Brown, T. B., et al. "Language Models are Few-Shot Learners." *NeurIPS*, 2020. — GPT-3 的 175B 参数、300B token、约 10,000 张 V100 训练配置，以及 6N 案例的总 FLOPs 计算。
+2. Kaplan, J., et al. "Scaling Laws for Neural Language Models." *arXiv:2001.08361*, 2020. — 6N 计算量近似与“计算量随参数量、token 数缩放”的原始讨论。
+3. Chowdhery, A., et al. "PaLM: Scaling Language Modeling with Pathways." *JMLR*, 2022. — PaLM 540B 在 TPU v4 上的 46.2% MFU 与 57.8% HFU 口径。
+4. Grattafiore, A., et al. "The Llama 3 Herd of Models." *arXiv:2407.21783*, 2024. — Llama 3 70B 的 15T token、80 层/8 KV head 架构，以及 405B 的 38–43% MFU 公开范围。
+5. Rajbhandari, S., et al. "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models." *SC*, 2020. — 16 B/参数训练状态的分解（权重、梯度、FP32 master、Adam m/v）。
+6. Korthikanti, V., et al. "Reducing Activation Recomputation in Large Transformer Models." *arXiv:2205.05198*, 2022. — 激活值显存模型与选择性重计算，用于 `c_act` 与 8N 的边界说明。
+7. Dao, T., et al. "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness." *NeurIPS*, 2022. — 注意力分数的分块计算，说明显式物化 `s²` 矩阵的显存代价。
+8. NVIDIA. *H100 Tensor Core GPU Datasheet* and *Hopper Architecture Whitepaper*, 2022–2023. — H100 989 TFLOPS BF16 稠密峰值、80 GB HBM3、3.35 TB/s、700 W；与 `SPECS.md` §1/§6 一致。

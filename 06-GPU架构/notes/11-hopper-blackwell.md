@@ -126,18 +126,9 @@ Blackwell Ultra 沿用 B200 的 `tcgen05`、TMEM 与 FP4/FP6 能力，只做规�
 
 ---
 
-## 3. GB200 NVL72
+## 3. GB200 NVL72（简述）
 
-GB200 NVL72 是一个机架级系统：
-
-- 72 个 Blackwell GPU + 36 个 Grace CPU；
-- 通过第 5 代 NVLink 与 **18 颗 NVSwitch 4（9 个交换托盘）** 实现机架内全互联，每 GPU 1.8 TB/s，整柜聚合带宽约 **130 TB/s**；
-- 72 张 GPU 的 HBM 合计 **13.8 TB**（72 × 192 GB），对软件呈现为一个大的 NVLink 域，可用 NCCL 做跨 72 GPU 的集合通信；
-- 与 InfiniBand/Ethernet 的跨机架 scale-out 网络配合使用。
-
-NVSwitch 芯片的端口数、单端口带宽和 NVLink 域上限见 [08 GPU 互联](08-gpu-interconnect.md) §3；本篇不重复展开。
-
-它体现了"scale-up（NVLink 域内） + scale-out（网络）"的两级互连设计。
+GB200 NVL72 把 72 个 Blackwell GPU 与 36 个 Grace CPU 通过 18 颗 NVSwitch 4 组成一个机架级 NVLink 域：每 GPU 双向 1.8 TB/s，整柜聚合带宽约 **130 TB/s**，72 张 GPU 的 HBM 合计 **13.8 TB**（72 × 192 GB），对软件呈现为一个可跨 72 GPU 做集合通信的域；域外再通过 scale-out 网络连接。机架/集群层的拓扑、组网与运维见 [why-ai-cluster 超大集群篇](https://github.com/zyfengaa/why-ai-cluster/blob/main/09-前沿与实践篇/01-超大集群长什么样.md)；NVSwitch 端口与域上限见 [08 单机与封装内互连](08-gpu-interconnect.md) §3。
 
 ---
 

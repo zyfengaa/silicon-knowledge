@@ -1,6 +1,6 @@
-# 08 — GPU 互联
+# 08 — 单机与封装内互连
 
-> 现代高性能计算系统中 GPU 不是孤立的计算单元。CPU-GPU 通信、GPU-GPU 通信的带宽和拓扑直接影响多 GPU 应用的性能。
+> 现代高性能计算系统中 GPU 不是孤立的计算单元。CPU-GPU 通信、GPU-GPU 通信的带宽和拓扑直接影响多 GPU 应用的性能。本篇聚焦芯片与单机封装内的互连；集群网络与并行策略见兄弟仓库 `why-ai-cluster`。
 
 ---
 
@@ -194,115 +194,40 @@ NVLink 域的上限随代际扩大：H100 为 8 卡，NVL72 为 72 卡，Rubin �
 ### NVSwitch 优势
 
 - **全互联**（All-to-All）：任意两个 GPU 间以 NVLink 全带宽通信
-- **可扩展**：通过 NVLink 集群互联，可扩展到数百个 GPU
+- **可扩展**：NVLink 域可从 8 卡扩展到 NVL72 的 72 卡（更大队列属集群组网）
 - **低延迟**：交换机内延迟极低（<1 μs）
 - **网络无阻塞**：总带宽足以支持所有 GPU 同时全速通信
 
 ---
 
-## 4. 多 GPU 训练通信模式
+## 4. 从单机互连到集群网络（延伸阅读）
 
-### 数据并行（Data Parallelism）
+本节只讨论芯片与单机封装内的互连。以下内容属于集群/系统层，统一放在兄弟仓库 `why-ai-cluster`：
 
-每个 GPU 持有完整模型副本，处理不同的数据批次：
+- 数据并行/张量并行/流水线并行/序列并行的通信模式与通信量分析
+- InfiniBand/RoCEv2、网络拓扑与超订阅比
+- DGX SuperPOD 等大规模组网、调度与运维
 
-```
-数据并行通信模式：
-                  ┌──────┐
-         批次 0 ──►│GPU 0 │───┐
-         批次 1 ──►│GPU 1 │───┤
-         批次 2 ──►│GPU 2 │───┤     梯度 AllReduce
-         批次 3 ──►│GPU 3 │───┼──► ┌───────────┐
-         批次 4 ──►│GPU 4 │───┤     │梯度聚合    │
-         批次 5 ──►│GPU 5 │───┤     │(Ring-AR)  │
-         批次 6 ──►│GPU 6 │───┤     └───────────┘
-         批次 7 ──►│GPU 7 │───┘
-```
+入口：
 
-- **通信模式**：梯度 AllReduce（Ring AllReduce / Tree AllReduce）
-- **通信量**：与模型参数量成正比（~2 × 模型大小的梯度数据）
-- **Scaling Law**：理想情况下，N 个 GPU 可获得 ~N 倍的训练吞吐（受通信效率限制）
+- [数据并行 DP](https://github.com/zyfengaa/why-ai-cluster/blob/main/05-并行策略篇/01-数据并行DP.md)
+- [张量并行 TP](https://github.com/zyfengaa/why-ai-cluster/blob/main/05-并行策略篇/02-张量并行TP.md)
+- [流水线并行 PP](https://github.com/zyfengaa/why-ai-cluster/blob/main/05-并行策略篇/03-流水线并行PP.md)
+- [序列并行 SP](https://github.com/zyfengaa/why-ai-cluster/blob/main/05-并行策略篇/05-序列并行SP.md)
+- [网络拓扑怎么选](https://github.com/zyfengaa/why-ai-cluster/blob/main/03-网络篇/05-网络拓扑怎么选.md)
+- [超大集群长什么样](https://github.com/zyfengaa/why-ai-cluster/blob/main/09-前沿与实践篇/01-超大集群长什么样.md)
 
-### 模型并行（Model Parallelism）
-
-将模型的不同层分布到不同 GPU 上：
-
-```
-流水线并行（Pipeline Parallelism）：
-GPU 0:  层 1-4    → 前向 → GPU 1
-GPU 1:  层 5-8    → 前向 → GPU 2
-GPU 2:  层 9-12   → 前向 → GPU 3
-GPU 3:  层 13-16  → 输出
-
-反向传播方向相反：GPU 3 → GPU 2 → GPU 1 → GPU 0
-```
-
-- **通信模式**：激活值传输（前向） + 梯度传输（反向）
-- **通信量**：与激活值大小成正比
-- **占用**：流水线气泡（bubble）降低效率，通过微批次（micro-batch）优化
-
-### 张量并行（Tensor Parallelism）
-
-将单层的矩阵切分到多个 GPU 上：
-
-```
-张量并行（以列切分为例）：
-输入 X ──┬── GPU 0: W[:, 0:N/4]  → X · W[:, 0:N/4]  ──┐
-          ├── GPU 1: W[:, N/4:N/2] → X · W[:, N/4:N/2] ──┤── AllReduce → Y
-          ├── GPU 2: W[:, N/2:3N/4] → X · W[:, N/2:3N/4] ─┤
-          └── GPU 3: W[:, 3N/4:N] → X · W[:, 3N/4:N]  ──┘
-```
-
-- **通信模式**：AllReduce 或 AllGather
-- **通信量**：与激活值大小成正比
-- **最优策略**：在单节点内使用张量并行（利用 NVLink 高带宽）
-
-### 通信策略对比
-
-| 策略 | 通信模式 | 通信量 | 适用场景 | 推荐互联 |
-|------|---------|-------|---------|---------|
-| 数据并行 | AllReduce | 梯度大小 × 2 | 小模型 | NVLink / 高速网络 |
-| 流水线并行 | P2P 激活传输 | 激活值大小 | 超大模型 | NVLink |
-| 张量并行 | AllReduce | 激活值大小 | 一层过大的模型 | NVLink（要求最高） |
-| 序列并行 | AllReduce | 序列维度相关 | 长序列 Transformer | NVLink |
-
----
-
-## 5. DGX SuperPOD 架构
-
-### NVIDIA 的超级计算机架构
-
-DGX SuperPOD 通过 NVSwitch 和网络将数百个 GPU 组成集群：
-
-```
-DGX SuperPOD H100 架构：
-DGX H100 × 32 节点（256 GPU）
-  │
-  ├── 同一节点内：NVLink + NVSwitch（900 GB/s GPU-GPU）
-  └── 节点间：InfiniBand NDR 400G（~50 GB/s 单向）
-       └── Mellanox QM9700 交换机全互联
-```
-
-这一架构优化了：
-- **节点内通信**：NVLink/NVSwitch 提供极致的 GPU-GPU 带宽
-- **节点间通信**：InfiniBand 提供可扩展的跨节点通信
-- **拓扑感知**：NCCL 自动感知拓扑结构，选择最优通信路径
-
-需要明确：这里的 256 卡**不是** NVLink 全互联。每个 DGX H100 节点内部才是 8 卡 NVLink 域（900 GB/s），节点之间全部经 InfiniBand NDR 400G（约 50 GB/s 单向）。把"SuperPOD 有 256 个 GPU"误读成"256 卡 NVLink 全互联"会高估跨节点带宽一个数量级以上。
+需要保留的一条硬件事实：DGX SuperPOD 的 256 卡是 32 个 8 卡节点通过 InfiniBand 互联，不是"256 卡 NVLink 全互联"；每个 8 卡节点内部才是 NVLink 域。把两者混为一谈会把跨节点带宽高估一个数量级以上。
 
 ---
 
 ## 参考文献
 
 - NVIDIA, *NVLink and NVSwitch Whitepaper*, 2022. Sections: NVLink 4.0 Architecture, NVSwitch 3rd Gen.
-- NVIDIA, *DGX SuperPOD: Next Generation Data Center Architecture*, 2023.
 - NVIDIA, *DGX H100 System Architecture Whitepaper*, 2022. Section: NVLink Topology.
-- NVIDIA, *NCCL (NVIDIA Collective Communications Library) Documentation*, Section: Topology-aware Communication.
-- Li, S. et al., "Demystifying the Communication Characteristics for Distributed Transformer Models", *arXiv:2211.01186*, 2022.
 - PCI-SIG, *PCI Express Base Specification Revision 5.0*, 2019.
 - NVIDIA, *CUDA C++ Programming Guide*, Section 3.2: Multiple Devices, Section 3.2.4: Peer-to-Peer Access.
 - NVIDIA, *NVIDIA H100 Tensor Core GPU Architecture*, Section: NVLink and NVSwitch Connectivity.
-- Shoeybi, M. et al., "Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism", *arXiv:1909.08053*, 2019. Section: Model and Data Parallelism.
 - UALink Consortium, *UALink 1.0 Specification*, 2025. — UALink 端口速率与 scale-up 语义.
 - NVIDIA, *NVIDIA GB200 NVL72 System Architecture*, 2024. — NVL72 的 NVSwitch 数量与整柜带宽.
 - Open Compute Project, *Ethernet for Scale-Up Networking (ESUN)*, 2025. — 基于以太网的 scale-up 工作流.
