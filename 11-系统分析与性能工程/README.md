@@ -10,16 +10,19 @@
 |------|------|---------|
 | 01 | **Roofline 模型** | 如何判断程序是 compute-bound 还是 memory-bound |
 | 02 | **Amdahl vs Gustafson** | 并行加速的理论上限分析 |
-| 03 | **功耗与散热** | TDP、DVFS、暗硅（Dark Silicon）、异构设计 |
+| 03 | **功耗、能效与芯片热设计** | CMOS 功耗、DVFS、暗硅、封装热阻与 TDP 契约 |
 | 04 | **异构计算系统** | CPU + GPU + NPU 协同工作的系统设计 |
 | 05 | **Linux perf** | CPU 性能计数器采样、火焰图生成 |
 | 06 | **GPU Profiling** | Nsight Compute / Nsight Systems / rocprof 实操指南 |
 | 07 | **TPU Profiling** | TPU 性能分析工具链 |
-| 08 | **端到端案例** | 大模型训练系统的硬件端到端分析与优化 |
+| 08 | **训练系统硬件预算** | 从 6N FLOPs 推导显存、MFU 与训练时间；并行策略见 why-ai-cluster |
 
 ## 前置知识
 
 - 模块 01~10 全部知识（需要综合运用）
+- 建议同时阅读 [12-07 从晶体管到微架构](../12-半导体器件与CMOS电路/notes/08-transistor-to-microarchitecture.md)
+
+> 本模块保留芯片功耗、性能模型与硬件预算推导；集群并行策略、组网、调度与运维见 [why-ai-cluster](https://github.com/zyfengaa/why-ai-cluster)。
 
 ## 建议学习方式
 

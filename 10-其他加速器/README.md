@@ -17,6 +17,8 @@
 | 07 | **近存计算** | 存算一体 / PIM（Processing-In-Memory）的动机和挑战 |
 | 08 | **前沿方向** | 光计算、模拟计算、量子计算的发展现状 |
 
+> 延伸：Chiplet 与 die-to-die 互连见 [13-06 Chiplet 与 UCIe](../13-工艺制造与先进封装/notes/06-chiplet-ucie.md)；芯片成本与 TCO 见 [14-08 AI 芯片 TCO](../14-可靠性与成本模型/notes/08-ai-chip-tco.md)。
+
 ## 前置知识
 
 - [08 NPU](../08-NPU神经网络处理器/)（作为对照基准，理解"专有加速"的设计权衡）

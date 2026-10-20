@@ -181,6 +181,43 @@ perf report
 
 ---
 
+## 模块 12 — 半导体器件与 CMOS 电路
+
+| 工具 | 用途 | 安装 |
+|------|------|------|
+| Python + NumPy/Matplotlib | MOSFET I-V、CMOS VTC、功耗模型 | `pip install numpy matplotlib` |
+| **ngspice**（可选） | 开源 SPICE 仿真器，做真实器件/电路仿真 | `apt install ngspice` |
+| **LTspice**（可选） | 图形化 SPICE，适合快速验证电路 | 官网下载 |
+| **Jupyter Notebook** | 交互式观察参数变化 | `pip install jupyter` |
+
+> 本仓库的代码用简化解析模型，不依赖真实 PDK；SPICE 仅作为可选加深工具。
+
+---
+
+## 模块 13 — 工艺制造与先进封装
+
+| 工具 | 用途 | 安装 |
+|------|------|------|
+| Python + Matplotlib | 光刻分辨率/DOF、互连 RC 估算 | `pip install numpy matplotlib` |
+| **KLayout**（可选） | 版图查看与 DRC，理解 CPP/MP 与设计规则 | [klayout.de](https://www.klayout.de) |
+| **IRDS / UCIe 规范**（阅读材料） | 工艺路线图与芯粒互连口径 | 官网/规范 PDF |
+
+> 本仓库不要求真实流片或 TCAD；工艺内容以公开规范与教材为主。
+
+---
+
+## 模块 14 — 可靠性与成本模型
+
+| 工具 | 用途 | 安装 |
+|------|------|------|
+| Python + NumPy/Matplotlib | 良率模型、die 成本、TCO 敏感性分析 | `pip install numpy matplotlib` |
+| **JEDEC JEP122/JEP148**（阅读材料） | 失效机制与可靠性认证方法 | JEDEC 官网 |
+| **SEMI 标准**（可选） | 晶圆/封装/测试口径 | SEMI 官网 |
+
+> 成本与寿命模型只用于理解量级与敏感性，不构成采购、报价或验收依据。
+
+---
+
 ## 工具安装检查清单
 
 ```bash

@@ -19,6 +19,8 @@
 | 09 | **软件栈** | XLA 编译器、JAX / TensorFlow on TPU |
 | 10 | **TPU vs GPU** | 在训练/推理场景的全面对比 |
 
+> TPU Pod 的集群组网、调度与液冷属于系统层，见 [why-ai-cluster](https://github.com/zyfengaa/why-ai-cluster)；本模块聚焦 TPU 芯片内部架构。
+
 ## 前置知识
 
 - [08 NPU](../08-NPU神经网络处理器/)（脉动阵列、量化、AI 编译器）

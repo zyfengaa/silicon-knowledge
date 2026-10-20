@@ -168,7 +168,86 @@ UALink 1.0 的端口速率为 800 Gb/s（100 GB/s 单向），ESUN 是 OCP 下�
 
 ---
 
-## 7. 使用建议
+## 7. 工艺、器件与封装基线
+
+> 本节的数字用于课程中的量级判断，不是工艺设计套件（PDK）参数，也不构成采购依据。
+> 无法核验的值标注"公开估算/未公开"；不同来源口径不一致时保留来源并注明。
+
+### 7.1 器件与电路常量
+
+| 参数 | 取值 | 口径/说明 |
+|------|------|----------|
+| 硅禁带宽度 Eg | ~1.12 eV | 300 K，教材常用值 |
+| 本征载流子浓度 ni | ~1.0×10^10 cm^-3 | 300 K，教材常用值 |
+| 亚阈值摆幅理论下限 | ~60 mV/dec | 300 K，kT/q·ln10 ≈ 59.6 mV/dec |
+| 现代逻辑电源电压 Vdd | ~0.6–1.2 V | 随节点与电压域变化 |
+| 阈值电压 Vth | ~0.2–0.6 V | 量级，依器件与工艺 |
+| Dennard 缩放失效 | ~2005 年前后 | 电压不再随尺寸同步缩放 |
+| 平面晶体管 → FinFET | 22 nm 节点（Intel，2011） | 量产起始年份 |
+| FinFET → GAA | 3 nm 级节点（2022 起） | Samsung 3GAE、TSMC N2 等，路线图口径 |
+
+### 7.2 晶圆与光刻
+
+| 项目 | 取值 | 口径 |
+|------|------|------|
+| 主流晶圆直径 | 300 mm | 450 mm 未大规模采用 |
+| 300 mm 硅片厚度 | ~775 µm | 标准厚度，量级 |
+| EUV 波长 | 13.5 nm | 反射式光学系统 |
+| EUV 数值孔径 NA | 0.33（标准）；0.55（High-NA） | 公开规格 |
+| 单次曝光视场 | 26 × 33 mm（~858 mm²） | 掩模版/曝光场 |
+
+### 7.3 先进封装与芯粒互连
+
+| 项目 | 取值/范围 | 口径 |
+|------|----------|------|
+| UCIe 1.0 数据率 | 4–32 GT/s | 标准/先进封装 |
+| UCIe 标准封装凸点间距 | 100–130 µm | UCIe 1.0 规范 |
+| UCIe 先进封装凸点间距 | 25–55 µm | UCIe 1.0 规范 |
+| UCIe 带宽密度（标准） | ~28–224 GB/s/mm | 公开规格 |
+| UCIe 带宽密度（先进） | ~165–1317 GB/s/mm | 公开规格 |
+| CoWoS-S 中介层上限 | ~3.3× reticle（~2,700 mm²） | 公开估算 |
+| CoWoS-L | 3.5× reticle 量产、5.5× 开发中 | 路线图口径（2026） |
+| HBM4 | 2048-bit、~2 TB/s/堆栈、24–64 GB/堆栈 | 见 §5.1 |
+| NV-HBI（B200 die-to-die） | ~10 TB/s | NVIDIA 公开口径 |
+
+封装数字随代工厂路线图变化很快，引用时必须写年份；不要把"reticle 倍数"当作芯片面积上限的绝对约束。
+
+---
+
+## 8. 可靠性与成本基线
+
+> 成本和可靠性数字是工程估算，受工艺、订单量、封装方案与测试策略影响很大；**不构成采购、报价或验收依据**。
+
+### 8.1 可靠性
+
+| 项目 | 取值/关系 | 说明 |
+|------|----------|------|
+| Black 方程 | MTTF = A·J^-n·exp(Ea/kT) | n ≈ 1–2；Ea 依金属体系 |
+| Cu 互连激活能 Ea | ~0.8–1.2 eV | 公开文献量级 |
+| FIT | 1 FIT = 1 失效 / 10^9 器件小时 | 失效率单位 |
+| BTI / HCI / TDDB | 阈值漂移 / 界面态 / 介质击穿 | 老化 guardband 的主要来源 |
+| HBM / 大容量存储 | 片内 ECC + 系统 ECC | 缓解软错误（SER） |
+
+### 8.2 良率与成本
+
+| 项目 | 公式/取值 | 说明 |
+|------|----------|------|
+| Poisson 良率 | Y = exp(-A·D0) | A 为 die 面积（cm²），D0 为缺陷密度 |
+| Murphy 良率 | Y = ((1 - e^(-A·D0)) / (A·D0))^2 | 缺陷随机分布模型 |
+| 负二项良率 | Y = (1 + A·D0/α)^(-α) | α 表示缺陷团簇程度 |
+| D0 典型量级 | ~0.1–1 defects/cm² | 成熟工艺公开估算 |
+| 每片 die 数 | N ≈ π(D/2 - e)^2 / A - πD/√(2A) | D 为晶圆直径，e 为边缘排除宽度 |
+| 300 mm 晶圆价格 | 数千至数万美元/片 | 依节点与代工厂，示例假设 |
+| HBM 成本 | ~10–20 美元/GB 量级 | 公开估算，详见 05-08 |
+| CoWoS 成本 | 占先进 AI 芯片 BOM 的显著比例 | 随中介层面积与良率变化 |
+| NRE | 掩模、设计、验证、封测开发 | 按产量摊销 |
+| TCO | capex + opex + 失效/运维 | 折算为 $/GPU-hour、$/token |
+
+成本公式的默认参数与 worked example 在 14-06/14-07/14-08；本表只保留口径与量级。
+
+---
+
+## 9. 使用建议
 
 1. **先问口径**：单芯片、板卡、Pod、整机，数字可能差一个数量级。
 2. **先问精度**：FP16、BF16、FP8、FP4、INT8 的峰值不可直接比较。
@@ -190,3 +269,11 @@ UALink 1.0 的端口速率为 800 Gb/s（100 GB/s 单向），ESUN 是 OCP 下�
 - Jouppi, N. P. et al., “TPU v4: An Optically Reconfigurable Supercomputer for Machine Learning with Hardware Support for Embeddings,” ISCA 2023.
 - JEDEC, *JESD238 (HBM3)*, *JESD238A (HBM3E)*, *JESD250 (GDDR6)*, *DDR5 SDRAM*.
 - Cerebras, *WSE-2 / WSE-3 Product Documentation*; Groq, *LPU Architecture*; Graphcore, *IPU Architecture*; SambaNova, *SN40L*.
+- UCIe Consortium, *Universal Chiplet Interconnect Express (UCIe) 1.0 Specification*, 2022. — §7.3 凸点间距、速率与带宽密度.
+- TSMC, *CoWoS Technology* and *2024 Annual Report*. — §7.3 中介层尺寸与封装路线图（公开估算）.
+- IRDS, *International Roadmap for Devices and Systems*, 2023–2024. — 器件与工艺路线图口径.
+- Dennard, R. H. et al., "Design of Ion-Implanted MOSFET's with Very Small Physical Dimensions," *IEEE JSSC*, 1974. — Dennard 缩放原始论文.
+- Black, J. R., "Electromigration—A Brief Survey and Some Recent Results," *IEEE Trans. Electron Devices*, 1969. — Black 方程.
+- Weste, N. H. E., & Harris, D., *CMOS VLSI Design: A Circuits and Systems Perspective*, 4th ed., Addison-Wesley, 2010. — 器件/电路/功耗基线.
+- Rabaey, J. M., Chandrakasan, A., & Nikolic, B., *Digital Integrated Circuits: A Design Perspective*, 2nd ed., Prentice Hall, 2003. — 门延迟与功耗.
+- Plummer, J. D., Deal, M. D., & Griffin, P. B., *Silicon VLSI Technology*, Prentice Hall, 2000. — 工艺流程.

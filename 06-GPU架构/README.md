@@ -15,11 +15,13 @@
 | 05 | **GPU 内存层次** | Global / Shared / Local / Register / Constant / Texture 各层级特性 |
 | 06 | **内存优化** | 合并访问（Coalescing）、Bank Conflict |
 | 07 | **Tensor Core** | 矩阵乘加速单元、混合精度（FP16/BF16/TF32/FP8/FP4） |
-| 08 | **GPU 互联** | NVLink、NVSwitch、PCIe 拓扑 |
+| 08 | **单机互连** | PCIe、NVLink、NVSwitch 的架构与代际；集群通信见 why-ai-cluster |
 | 09 | **架构演进** | NVIDIA Fermi → Kepler → Maxwell → Pascal → Volta → Turing → Ampere → Hopper → Blackwell |
 | 10 | **AMD / Intel GPU** | AMD CDNA 3、Intel Xe HPC 架构简介 |
-| 11 | **Hopper 与 Blackwell** | TMA、Thread Block Cluster、WGMMA、tcgen05/TMEM、FP4/FP6、GB200 NVL72 |
+| 11 | **Hopper 与 Blackwell** | TMA、Thread Block Cluster、WGMMA、tcgen05/TMEM、FP4/FP6；NVL72 系统层见 why-ai-cluster |
 | 12 | **精度与硬件** | 精度由哪些执行单元、数据通路、累加器和存储宽度决定；TF32/FP16/FP8/FP4 的吞吐比例从何而来 |
+
+> 本模块聚焦芯片与单机封装内结构；多机通信、并行策略与集群组网见 [why-ai-cluster](https://github.com/zyfengaa/why-ai-cluster)。
 
 ## 前置知识
 
